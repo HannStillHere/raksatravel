@@ -138,17 +138,21 @@ Lakukan pemindaian visual OCR ultra-teliti dari gambar poster tiket promo ini.
 ${captionHint ? `Petunjuk Teks Tambahan dari Pengirim/Caption: "${captionHint}"` : ''}
 
 ATURAN VALIDASI KETAT TEMPLATE RAKSA TRAVEL:
-1. Jika gambar BUKAN poster promo tiket perjalanan/penerbangan/kapal laut resmi (misalnya: foto orang, foto pemandangan, cosplay, anime, manga, meme, screenshot chat WA, struk, bukti transfer, video/youtube thumbnail, atau gambar non-promo), KEMBALIKAN JSON PERSIS:
+1. Jika gambar BUKAN poster promo tiket perjalanan/penerbangan/kapal laut resmi (misalnya: foto selfie, foto orang, cosplay, anime, manga, meme, screenshot chat pribadi, struk belanja, video/youtube thumbnail non-promo), KEMBALIKAN JSON PERSIS:
 {"is_valid": false}
 
-2. Poster promo tiket resmi Raksa Travel HARUS MEMILIKI FORMAT TEMPLATE RESMI:
-- Logo / nama maskapai penerbangan (LION AIR, BATIK AIR, GARUDA INDONESIA, CITILINK, SRIWIJAYA AIR, SUPER AIR JET, WINGS AIR) atau kapal PELNI.
-- Rute penerbangan jelas: Kota Asal dan Kota Tujuan (contoh: DJJ - CGK, JAYAPURA - SURABAYA, MAKASSAR - JAYAPURA, UPG - DJJ, SUB - DJJ, dll).
-- Harga promo tiket yang jelas (contoh: Rp 3.695.000, Rp 2.360.000, dll dengan nominal > Rp 500.000).
-- Tanggal/periode keberangkatan (contoh: 17, 18, 22 Okt, dll).
-Jika salah satu dari elemen penting ini TIDAK ADA pada gambar, gambar tersebut BUKAN POSTER PROMO RESMI. Kembalikan {"is_valid": false}.
+2. Poster promo tiket resmi Raksa Travel memiliki 2 format sah:
+A. Poster Flyer Grafis / Maskapai Resmi (berisi logo/nama maskapai, pesawat, rute, harga, tanggal).
+B. Kartu Teks Status / Story Promo Resmi Raksa Travel:
+- Berlatar warna solid/gradien (pink, ungu, hijau, biru, magenta, dll) dengan teks tebal terpusat di tengah.
+- Menyebutkan maskapai + tipe: "LION LANGSUNG", "LION TRANSIT", "BATIK LANGSUNG", "SRIWIJAYA TRANSIT", "GARUDA", "CITILINK", "PELNI", dll.
+- Menyebutkan rute: "MAKASSAR JAYAPURA", "JAYAPURA MAKASSAR", "JAYAPURA SURABAYA", "JAYAPURA JAKARTA", dll.
+- Menyebutkan harga tiket (misal 2,645,000 / 2,290,000 / 2,360,000 / 2,910,000 / 3,250,000 / 2,450,000 baik pemisah koma maupun titik).
+- Menyebutkan tanggal/bulan (misal OKTOBER, NOVEMBER, Tgl 18-26, dll).
+- Sering disertai "BAGASI .. KG" dan nomor kontak "WA 082153043601".
+KEDUA FORMAT INI ADALAH POSTER PROMO RESMI RAKSA TRAVEL YANG VALID 100%. Kembalikan {"is_valid": true} dan ekstrak datanya.
 
-3. Jika gambar MEMENUHI seluruh syarat poster promo tiket resmi di atas, ekstrak datanya dalam format JSON murni:
+3. Jika gambar MEMENUHI syarat di atas, ekstrak datanya dalam format JSON murni:
 {
   "is_valid": true,
   "badge": "Nama maskapai/operator resmi dalam huruf kapital (contoh: LION AIR, BATIK AIR, SRIWIJAYA AIR, CITILINK, GARUDA INDONESIA, SUPER AIR JET, WINGS AIR, PELNI, KM LABOBAR, KM DOBONSOLO)",
@@ -262,6 +266,13 @@ PANDUAN PEMBACAAN OCR:
           continue;
         }
 
+        let transitType = data.transit || 'Penerbangan Langsung';
+        if (String(data.badge).toUpperCase().includes('TRANSIT') || String(data.transit).toUpperCase().includes('TRANSIT')) {
+          transitType = 'Penerbangan Transit';
+        } else if (String(data.badge).toUpperCase().includes('LANGSUNG') || String(data.transit).toUpperCase().includes('LANGSUNG')) {
+          transitType = 'Penerbangan Langsung';
+        }
+
         const originCode = data.originCode || resolveIataCode(data.origin, 'DJJ');
         const destCode = data.destinationCode || resolveIataCode(data.destination, 'UPG');
 
@@ -276,7 +287,7 @@ PANDUAN PEMBACAAN OCR:
           originCode: originCode,
           destination: data.destination,
           destinationCode: destCode,
-          transit: data.transit || 'Penerbangan Langsung',
+          transit: transitType,
           price: cleanPrice,
           date: data.date || 'Keberangkatan Terdekat',
           baggage: data.baggage || 'Termasuk Bagasi',
@@ -621,10 +632,7 @@ async function uploadPosterToGitHub(base64ImageData, promoData, rawBuffer = null
 async function processMessageMedia(msg, sourceTag = 'EVENT') {
   const msgId = msg.key?.id;
   if (msgId && processedMessageIds.has(msgId)) {
-    return;
-  }
-  if (msgId) {
-    saveProcessedMessageId(msgId);
+    return null;
   }
 
   const msgObj = msg.message || {};
@@ -663,6 +671,9 @@ async function processMessageMedia(msg, sourceTag = 'EVENT') {
         console.log(`✅ [PROMO TERVALIDASI]: ${promoData.badge} | ${promoData.origin} -> ${promoData.destination} | Rp ${promoData.price}`);
         await commitPromosToGitHub(promoData);
         await uploadPosterToGitHub(base64Data, promoData, compressedBuffer);
+        if (msgId) {
+          saveProcessedMessageId(msgId);
+        }
         return promoData;
       }
     } catch (err) {
@@ -1008,10 +1019,57 @@ const handleSyncRequest = async (req, res) => {
   }
 };
 
+app.get('/api/debug-channel', async (req, res) => {
+  if (!globalSock || !isConnected) return res.status(503).json({ error: 'offline' });
+  try {
+    let meta = null;
+    try {
+      meta = await globalSock.newsletterMetadata('invite', TARGET_CHANNEL_CODE);
+    } catch (e) {
+      meta = { error: e.message };
+    }
+    
+    let msgs = null;
+    try {
+      msgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, 20);
+    } catch (e) {
+      msgs = { error: e.message };
+    }
+
+    let subscribed = null;
+    try {
+      if (typeof globalSock.newsletterSubscribed === 'function') {
+        subscribed = await globalSock.newsletterSubscribed();
+      }
+    } catch (e) {
+      subscribed = { error: e.message };
+    }
+
+    res.json({
+      targetCode: TARGET_CHANNEL_CODE,
+      targetJid: TARGET_CHANNEL_JID,
+      meta,
+      subscribed,
+      msgsCount: Array.isArray(msgs) ? msgs.length : msgs
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/sync', handleSyncRequest);
 app.post('/wa/promo/api/sync', handleSyncRequest);
 app.get('/api/sync-6', handleSyncRequest);
 app.post('/api/sync-6', handleSyncRequest);
+
+app.post('/api/restart', (req, res) => {
+  res.json({ ok: true, message: 'Restarting bot in 1s...' });
+  setTimeout(() => process.exit(0), 1000);
+});
+app.post('/wa/promo/api/restart', (req, res) => {
+  res.json({ ok: true, message: 'Restarting bot in 1s...' });
+  setTimeout(() => process.exit(0), 1000);
+});
 
 app.listen(PORT, () => {
   console.log(`🌐 Web monitoring active on port ${PORT}`);
