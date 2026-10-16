@@ -137,10 +137,18 @@ TUGAS UTAMA:
 Lakukan pemindaian visual OCR ultra-teliti dari gambar poster tiket promo ini.
 ${captionHint ? `Petunjuk Teks Tambahan dari Pengirim/Caption: "${captionHint}"` : ''}
 
-ATURAN EKSTRAKSI DATA:
-1. Jika gambar BUKAN poster promo tiket perjalanan/penerbangan/kapal laut, kembalikan JSON persis: {"is_valid": false}
+ATURAN VALIDASI KETAT TEMPLATE RAKSA TRAVEL:
+1. Jika gambar BUKAN poster promo tiket perjalanan/penerbangan/kapal laut resmi (misalnya: foto orang, foto pemandangan, cosplay, anime, manga, meme, screenshot chat WA, struk, bukti transfer, video/youtube thumbnail, atau gambar non-promo), KEMBALIKAN JSON PERSIS:
+{"is_valid": false}
 
-2. Jika gambar ADALAH POSTER TIKET PROMO, ekstrak seluruh informasi teks visual dengan akurasi 100% dan kembalikan format JSON murni:
+2. Poster promo tiket resmi Raksa Travel HARUS MEMILIKI FORMAT TEMPLATE RESMI:
+- Logo / nama maskapai penerbangan (LION AIR, BATIK AIR, GARUDA INDONESIA, CITILINK, SRIWIJAYA AIR, SUPER AIR JET, WINGS AIR) atau kapal PELNI.
+- Rute penerbangan jelas: Kota Asal dan Kota Tujuan (contoh: DJJ - CGK, JAYAPURA - SURABAYA, MAKASSAR - JAYAPURA, UPG - DJJ, SUB - DJJ, dll).
+- Harga promo tiket yang jelas (contoh: Rp 3.695.000, Rp 2.360.000, dll dengan nominal > Rp 500.000).
+- Tanggal/periode keberangkatan (contoh: 17, 18, 22 Okt, dll).
+Jika salah satu dari elemen penting ini TIDAK ADA pada gambar, gambar tersebut BUKAN POSTER PROMO RESMI. Kembalikan {"is_valid": false}.
+
+3. Jika gambar MEMENUHI seluruh syarat poster promo tiket resmi di atas, ekstrak datanya dalam format JSON murni:
 {
   "is_valid": true,
   "badge": "Nama maskapai/operator resmi dalam huruf kapital (contoh: LION AIR, BATIK AIR, SRIWIJAYA AIR, CITILINK, GARUDA INDONESIA, SUPER AIR JET, WINGS AIR, PELNI, KM LABOBAR, KM DOBONSOLO)",
@@ -150,8 +158,8 @@ ATURAN EKSTRAKSI DATA:
   "destination": "Nama kota tujuan (contoh: Makassar, Jayapura, Surabaya, Jakarta, Denpasar, Timika, Biak, Sorong, Nabire, Merauke)",
   "destinationCode": "Kode bandara tujuan 3 huruf resmi IATA (contoh: UPG, DJJ, SUB, CGK, DPS, TIM, BIK, SOQ, NBX, MKQ)",
   "transit": "Tipe rute persis (contoh: Penerbangan Langsung / Penerbangan Transit / Transit Makassar / Transit Surabaya / Transit 1X / Kapal Laut Langsung)",
-  "price": "Nominal harga termurah (HANYA ANGKA dengan pemisah titik ribuan, tanpa kata Rp, contoh: 2.220.000 / 2.290.000 / 3.305.000 / 3.475.000 / 1.850.000)",
-  "date": "Daftar tanggal/periode jadwal keberangkatan persis seperti di poster (contoh: Tgl 22, 24, 26, 29 September / Tgl 22 s/d 30 September / Tgl 24, 25, 26, 28, 29, 30 September)",
+  "price": "Nominal harga termurah (HANYA ANGKA dengan pemisah titik ribuan, tanpa kata Rp, contoh: 2.220.000 / 2.290.000 / 3.305.000 / 3.475.000 / 3.695.000 / 1.850.000)",
+  "date": "Daftar tanggal/periode jadwal keberangkatan persis seperti di poster (contoh: 17, 18, 22 Okt / Tgl 19 s/d 29 Oktober)",
   "baggage": "Keterangan jatah bagasi resmi (contoh: Termasuk Bagasi 10 KG / Termasuk Bagasi 15 KG / Termasuk Bagasi 20 KG / Free Bagasi Kabin 7 KG / Tanpa Bagasi)",
   "phone": "Nomor kontak WhatsApp yang tertera di poster jika ada (contoh: 082153043601)"
 }
@@ -223,8 +231,8 @@ PANDUAN PEMBACAAN OCR:
 
         const data = JSON.parse(jsonMatch[0]);
 
-        if (data.is_valid === false || !data.origin || !data.destination || !data.price) {
-          console.log(`⚠️ AI Vision (${modelName}): Gambar bukan poster promo atau rute/harga kosong.`);
+        if (data.is_valid !== true || !data.origin || !data.destination || !data.price) {
+          console.log(`⚠️ AI Vision (${modelName}): Gambar BUKAN poster promo resmi atau rute/harga tidak lengkap.`);
           continue;
         }
 
@@ -234,27 +242,36 @@ PANDUAN PEMBACAAN OCR:
           cleanPrice = Number(cleanPrice).toLocaleString('id-ID');
         }
 
-        if (!/\d/.test(cleanPrice)) {
+        const numPrice = parseInt(cleanPrice.replace(/\./g, ''), 10);
+        if (isNaN(numPrice) || numPrice < 500000) {
+          console.log(`⚠️ AI Vision (${modelName}): Harga tidak valid (< 500.000): ${cleanPrice}`);
           continue;
         }
 
-        let badgeName = (data.badge || 'TIKET PROMO').toUpperCase();
-        if (badgeName.includes('LION') && !badgeName.includes('AIR')) badgeName = 'LION AIR';
-        if (badgeName.includes('BATIK') && !badgeName.includes('AIR')) badgeName = 'BATIK AIR';
-        if (badgeName.includes('SRIWIJAYA') && !badgeName.includes('AIR')) badgeName = 'SRIWIJAYA AIR';
-        if (badgeName.includes('GARUDA') && !badgeName.includes('INDONESIA')) badgeName = 'GARUDA INDONESIA';
-        if (badgeName.includes('SUPER') && !badgeName.includes('AIR JET')) badgeName = 'SUPER AIR JET';
+        let badgeName = (data.badge || '').toUpperCase();
+        if (badgeName.includes('LION')) badgeName = 'LION AIR';
+        else if (badgeName.includes('BATIK')) badgeName = 'BATIK AIR';
+        else if (badgeName.includes('SRIWIJAYA')) badgeName = 'SRIWIJAYA AIR';
+        else if (badgeName.includes('GARUDA')) badgeName = 'GARUDA INDONESIA';
+        else if (badgeName.includes('CITILINK')) badgeName = 'CITILINK';
+        else if (badgeName.includes('SUPER') && badgeName.includes('AIR')) badgeName = 'SUPER AIR JET';
+        else if (badgeName.includes('WINGS')) badgeName = 'WINGS AIR';
+        else if (badgeName.includes('PELNI') || badgeName.includes('KM ') || badgeName.includes('KAPAL')) badgeName = 'PELNI';
+        else {
+          console.log(`⚠️ AI Vision (${modelName}): Maskapai/operator tidak dikenal (${data.badge}), ditolak.`);
+          continue;
+        }
 
         const originCode = data.originCode || resolveIataCode(data.origin, 'DJJ');
         const destCode = data.destinationCode || resolveIataCode(data.destination, 'UPG');
 
-        console.log(`✨ [AI VISION SUKSES via ${modelName}]: ${badgeName} | ${data.origin} (${originCode}) -> ${data.destination} (${destCode}) | Rp ${cleanPrice}`);
+        console.log(`✨ [AI VISION VALIDASI SUKSES via ${modelName}]: ${badgeName} | ${data.origin} (${originCode}) -> ${data.destination} (${destCode}) | Rp ${cleanPrice}`);
 
         return {
           id: `promo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           badge: badgeName,
-          badgeType: data.badgeType || (badgeName.includes('PELNI') || badgeName.includes('KM ') ? 'ship' : 'airline'),
-          airlineLogo: (data.badgeType === 'ship' || badgeName.includes('PELNI') || badgeName.includes('KM ')) ? 'ship' : 'plane',
+          badgeType: badgeName === 'PELNI' ? 'ship' : 'airline',
+          airlineLogo: badgeName === 'PELNI' ? 'ship' : 'plane',
           origin: data.origin,
           originCode: originCode,
           destination: data.destination,
@@ -271,52 +288,59 @@ PANDUAN PEMBACAAN OCR:
     }
   }
 
-  // Smart Regex Fallback if caption has promo details
+  // Strict Regex Fallback ONLY IF caption contains complete verified promo details
   if (captionHint) {
     const text = captionHint.toUpperCase();
     const priceMatch = text.match(/(?:RP\.?\s*)?(\d{1,3}(?:\.\d{3})+)/);
     if (priceMatch) {
-      let badge = 'TIKET PROMO';
-      if (text.includes('LION')) badge = 'LION AIR';
-      else if (text.includes('BATIK')) badge = 'BATIK AIR';
-      else if (text.includes('SRIWIJAYA')) badge = 'SRIWIJAYA AIR';
-      else if (text.includes('CITILINK')) badge = 'CITILINK';
-      else if (text.includes('GARUDA')) badge = 'GARUDA INDONESIA';
-      else if (text.includes('SUPER AIR JET')) badge = 'SUPER AIR JET';
-      else if (text.includes('PELNI') || text.includes('KAPAL')) badge = 'PELNI';
+      const numVal = parseInt(priceMatch[1].replace(/\./g, ''), 10);
+      if (numVal >= 500000) {
+        let badge = null;
+        if (text.includes('LION')) badge = 'LION AIR';
+        else if (text.includes('BATIK')) badge = 'BATIK AIR';
+        else if (text.includes('SRIWIJAYA')) badge = 'SRIWIJAYA AIR';
+        else if (text.includes('CITILINK')) badge = 'CITILINK';
+        else if (text.includes('GARUDA')) badge = 'GARUDA INDONESIA';
+        else if (text.includes('SUPER AIR JET')) badge = 'SUPER AIR JET';
+        else if (text.includes('PELNI') || text.includes('KAPAL')) badge = 'PELNI';
 
-      let origin = 'Jayapura';
-      let dest = 'Makassar';
-      if (text.includes('MAKASSAR - JAYAPURA') || text.includes('MAKASSAR KE JAYAPURA') || text.includes('UPG - DJJ') || text.includes('UPG KE DJJ')) {
-        origin = 'Makassar'; dest = 'Jayapura';
-      } else if (text.includes('JAYAPURA - MAKASSAR') || text.includes('JAYAPURA KE MAKASSAR') || text.includes('DJJ - UPG') || text.includes('DJJ KE UPG')) {
-        origin = 'Jayapura'; dest = 'Makassar';
-      } else if (text.includes('SURABAYA - JAYAPURA') || text.includes('SUB - DJJ')) {
-        origin = 'Surabaya'; dest = 'Jayapura';
-      } else if (text.includes('JAYAPURA - SURABAYA') || text.includes('DJJ - SUB')) {
-        origin = 'Jayapura'; dest = 'Surabaya';
-      } else if (text.includes('JAKARTA - JAYAPURA') || text.includes('CGK - DJJ')) {
-        origin = 'Jakarta'; dest = 'Jayapura';
-      } else if (text.includes('JAYAPURA - JAKARTA') || text.includes('DJJ - CGK')) {
-        origin = 'Jayapura'; dest = 'Jakarta';
+        if (badge) {
+          let origin = null;
+          let dest = null;
+          if (text.includes('MAKASSAR - JAYAPURA') || text.includes('MAKASSAR KE JAYAPURA') || text.includes('UPG - DJJ') || text.includes('UPG KE DJJ')) {
+            origin = 'Makassar'; dest = 'Jayapura';
+          } else if (text.includes('JAYAPURA - MAKASSAR') || text.includes('JAYAPURA KE MAKASSAR') || text.includes('DJJ - UPG') || text.includes('DJJ KE UPG')) {
+            origin = 'Jayapura'; dest = 'Makassar';
+          } else if (text.includes('SURABAYA - JAYAPURA') || text.includes('SUB - DJJ')) {
+            origin = 'Surabaya'; dest = 'Jayapura';
+          } else if (text.includes('JAYAPURA - SURABAYA') || text.includes('DJJ - SUB')) {
+            origin = 'Jayapura'; dest = 'Surabaya';
+          } else if (text.includes('JAKARTA - JAYAPURA') || text.includes('CGK - DJJ')) {
+            origin = 'Jakarta'; dest = 'Jayapura';
+          } else if (text.includes('JAYAPURA - JAKARTA') || text.includes('DJJ - CGK')) {
+            origin = 'Jayapura'; dest = 'Jakarta';
+          }
+
+          if (origin && dest) {
+            console.log(`⚡ [STRICT CAPTION EXTRACTED]: ${badge} ${origin}-${dest} Rp ${priceMatch[1]}`);
+            return {
+              id: `promo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              badge: badge,
+              badgeType: badge === 'PELNI' ? 'ship' : 'airline',
+              airlineLogo: badge === 'PELNI' ? 'ship' : 'plane',
+              origin: origin,
+              originCode: resolveIataCode(origin, 'DJJ'),
+              destination: dest,
+              destinationCode: resolveIataCode(dest, 'UPG'),
+              transit: text.includes('TRANSIT') ? 'Penerbangan Transit' : 'Penerbangan Langsung',
+              price: priceMatch[1],
+              date: 'Keberangkatan Terdekat',
+              baggage: 'Termasuk Bagasi',
+              waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badge} ${origin} - ${dest} Rp ${priceMatch[1]}`)
+            };
+          }
+        }
       }
-
-      console.log(`⚡ [CAPTION FALLBACK EXTRACTED]: ${badge} ${origin}-${dest} Rp ${priceMatch[1]}`);
-      return {
-        id: `promo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-        badge: badge,
-        badgeType: badge === 'PELNI' ? 'ship' : 'airline',
-        airlineLogo: badge === 'PELNI' ? 'ship' : 'plane',
-        origin: origin,
-        originCode: resolveIataCode(origin, 'DJJ'),
-        destination: dest,
-        destinationCode: resolveIataCode(dest, 'UPG'),
-        transit: text.includes('TRANSIT') ? 'Penerbangan Transit' : 'Penerbangan Langsung',
-        price: priceMatch[1],
-        date: 'Keberangkatan Terdekat',
-        baggage: 'Termasuk Bagasi',
-        waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badge} ${origin} - ${dest} Rp ${priceMatch[1]}`)
-      };
     }
   }
 
@@ -631,25 +655,15 @@ async function processMessageMedia(msg, sourceTag = 'EVENT') {
         console.log('🤖 Ekstraksi metadata promo dengan AI Vision / OCR Engine...');
         const promoData = await analyzeImageWithAiVision(base64Data, captionHint);
 
-        const finalPromoData = promoData || {
-          badge: 'TIKET PROMO',
-          badgeType: 'airline',
-          origin: 'Jayapura',
-          destination: 'Makassar',
-          price: '',
-          date: 'Promo Terbatas',
-          transit: 'Penerbangan Langsung',
-          baggage: 'Termasuk Bagasi',
-          waText: encodeURIComponent('Halo RaksaTravel, saya tertarik dengan tiket promo ini')
-        };
-
-        if (promoData) {
-          console.log(`✅ [PROMO TERVALIDASI]: ${promoData.badge} | ${promoData.origin} -> ${promoData.destination} | Rp ${promoData.price}`);
-          await commitPromosToGitHub(promoData);
+        if (!promoData || !promoData.badge || !promoData.origin || !promoData.destination || !promoData.price) {
+          console.log(`⛔ [DIABAIKAN] Gambar ID ${msgId} BUKAN poster promo tiket resmi Raksa Travel. Ditolak.`);
+          return null;
         }
 
-        await uploadPosterToGitHub(base64Data, finalPromoData, compressedBuffer);
-        return finalPromoData;
+        console.log(`✅ [PROMO TERVALIDASI]: ${promoData.badge} | ${promoData.origin} -> ${promoData.destination} | Rp ${promoData.price}`);
+        await commitPromosToGitHub(promoData);
+        await uploadPosterToGitHub(base64Data, promoData, compressedBuffer);
+        return promoData;
       }
     } catch (err) {
       console.error(`❌ Gagal mendownload / memproses gambar: ${err.message}`);
@@ -775,6 +789,11 @@ async function startWhatsAppBot() {
 
       // Start continuous channel watchdog
       startNewsletterWatchdog(sock);
+
+      // Auto-sync 6 latest verified official promos on startup
+      setTimeout(() => {
+        syncLatestChannelPromos(40);
+      }, 5000);
     }
   });
 
@@ -857,7 +876,10 @@ app.get('/', (req, res) => {
           btn.innerText = '⏳ Sedang Memeriksa Saluran...';
           btn.disabled = true;
           try {
-            const res = await fetch('/api/sync', { method: 'POST' });
+            let res = await fetch('/wa/promo/api/sync', { method: 'POST' }).catch(() => null);
+            if (!res || !res.ok) {
+              res = await fetch('/api/sync', { method: 'POST' });
+            }
             const data = await res.json();
             alert(data.message || 'Sinkronisasi berhasil dijalankan!');
             window.location.reload();
@@ -881,33 +903,115 @@ app.get('/status', (req, res) => {
     targetChannelCode: TARGET_CHANNEL_CODE,
     targetChannelJid: TARGET_CHANNEL_JID,
     processedCount: processedMessageIds.size,
-    recentLogs: syncLogHistory.slice(0, 10)
+    recentLogs: syncLogHistory.slice(0, 10),
+    hasQr: !!latestQrRaw
   });
 });
 
-app.post('/api/sync', async (req, res) => {
+app.get('/qr', (req, res) => {
+  res.json({
+    online: isConnected,
+    status: authStatus,
+    qr: latestQrRaw,
+    qrDataUrl: latestQrDataUrl
+  });
+});
+
+async function syncLatestChannelPromos(limit = 40) {
+  if (!globalSock || !isConnected) {
+    console.log('⚠️ WhatsApp bot belum terkoneksi.');
+    return { ok: false, message: 'WhatsApp bot belum terkoneksi.' };
+  }
+  logSync(`Memulai auto-sync 6 promo resmi dari saluran WhatsApp (${TARGET_CHANNEL_JID})...`);
+  try {
+    const channelMsgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, limit);
+    if (!channelMsgs || channelMsgs.length === 0) {
+      logSync('Tidak ada pesan di saluran.');
+      return { ok: true, count: 0, promos: [] };
+    }
+
+    channelMsgs.sort((a, b) => (b.messageTimestamp || 0) - (a.messageTimestamp || 0));
+
+    let validCount = 0;
+    const foundPromos = [];
+
+    for (const cMsg of channelMsgs) {
+      const msgId = cMsg.key?.id;
+      const msgObj = cMsg.message || {};
+      const imgObj = msgObj.imageMessage || 
+                     msgObj.viewOnceMessageV2?.message?.imageMessage ||
+                     msgObj.viewOnceMessage?.message?.imageMessage ||
+                     msgObj.documentWithCaptionMessage?.message?.imageMessage ||
+                     (msgObj.documentMessage?.mimetype?.startsWith('image/') ? msgObj.documentMessage : null);
+
+      if (!imgObj) continue;
+
+      const captionHint = imgObj?.caption || msgObj.extendedTextMessage?.text || msgObj.conversation || '';
+
+      try {
+        const rawBuffer = await downloadMediaMessage(cMsg, 'buffer', {});
+        if (!rawBuffer || rawBuffer.length < 1000) continue;
+
+        const compressedBuffer = await compressImageBuffer(rawBuffer);
+        const base64Data = compressedBuffer.toString('base64');
+        const promoData = await analyzeImageWithAiVision(base64Data, captionHint);
+
+        if (promoData && promoData.badge && promoData.origin && promoData.destination && promoData.price) {
+          validCount++;
+          console.log(`🎯 [SALURAN RESMI PROMO ${validCount}/6]: ${promoData.badge} ${promoData.origin}->${promoData.destination} Rp ${promoData.price}`);
+          await commitPromosToGitHub(promoData);
+          await uploadPosterToGitHub(base64Data, promoData, compressedBuffer);
+          foundPromos.push({
+            id: msgId,
+            badge: promoData.badge,
+            route: `${promoData.origin} - ${promoData.destination}`,
+            price: promoData.price,
+            date: promoData.date
+          });
+          if (validCount >= 6) {
+            logSync(`✅ Sukses update 6 promo resmi terbaru dari saluran!`);
+            break;
+          }
+        } else {
+          console.log(`⛔ [NON-PROMO DIABAIKAN] ID: ${msgId}`);
+        }
+      } catch (err) {
+        console.error(`Error analyzing msg ${msgId}:`, err.message);
+      }
+    }
+
+    try {
+      fs.writeFileSync('/home/container/latest_6_promos_result.json', JSON.stringify({
+        timestamp: new Date().toISOString(),
+        count: validCount,
+        promos: foundPromos
+      }, null, 2), 'utf-8');
+    } catch (e) {}
+
+    return { ok: true, count: validCount, promos: foundPromos };
+  } catch (err) {
+    logSync(`Error sync saluran: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
+const handleSyncRequest = async (req, res) => {
   if (!globalSock || !isConnected) {
     return res.status(503).json({ success: false, message: 'WhatsApp bot belum terkoneksi ke Cloud.' });
   }
 
   try {
-    const channelMsgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, 25);
-    let processed = 0;
-    if (channelMsgs && channelMsgs.length > 0) {
-      channelMsgs.sort((a, b) => (b.messageTimestamp || 0) - (a.messageTimestamp || 0));
-      for (const cMsg of channelMsgs) {
-        const msgId = cMsg.key?.id;
-        if (msgId && !processedMessageIds.has(msgId)) {
-          await processMessageMedia(cMsg, 'MANUAL-SYNC');
-          processed++;
-        }
-      }
-    }
-    res.json({ success: true, message: `Sinkronisasi selesai! ${processed} promo baru diproses.` });
+    const result = await syncLatestChannelPromos(40);
+    res.json({ success: result.ok, message: `Sinkronisasi selesai! ${result.count} promo resmi terbaru diproses.`, promos: result.promos });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
-});
+};
+
+app.post('/api/sync', handleSyncRequest);
+app.post('/wa/promo/api/sync', handleSyncRequest);
+app.get('/api/sync-6', handleSyncRequest);
+app.post('/api/sync-6', handleSyncRequest);
 
 app.listen(PORT, () => {
   console.log(`🌐 Web monitoring active on port ${PORT}`);
