@@ -1,0 +1,48 @@
+name: Pterodactyl Watchdog
+
+# Restarts the server when the panel reports it offline (e.g. host-side stop).
+# Does nothing when the server is suspended.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ptero-watchdog
+  cancel-in-progress: false
+
+jobs:
+  watchdog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start server if offline
+        env:
+          PTERO_API_KEY: ${{ secrets.PTERO_API_KEY }}
+        run: |
+          set -euo pipefail
+          BASE="https://ptero.bimxyz.id/api/client"
+          ID="b072ff89"
+          AUTH=(-H "Authorization: Bearer $PTERO_API_KEY" -H "Accept: application/json")
+
+          res=$(curl -fsS "${AUTH[@]}" "$BASE/servers/$ID/resources")
+          state=$(jq -r '.attributes.current_state' <<<"$res")
+          suspended=$(jq -r '.attributes.is_suspended' <<<"$res")
+          echo "state=$state suspended=$suspended"
+
+          if [ "$state" = "running" ] || [ "$suspended" = "true" ]; then
+            echo "No action needed"
+            exit 0
+          fi
+
+          echo "Server is $state - sending start"
+          curl -fsS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
+            -d '{"signal":"start"}' "$BASE/servers/$ID/power"
+
+          sleep 25
+          after=$(curl -fsS "${AUTH[@]}" "$BASE/servers/$ID/resources" | jq -r '.attributes.current_state')
+          echo "after=$after"
