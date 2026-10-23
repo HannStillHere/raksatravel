@@ -25,8 +25,8 @@ jobs:
           PTERO_API_KEY: ${{ secrets.PTERO_API_KEY }}
         run: |
           set -euo pipefail
-          BASE="https://ptero.bimxyz.id/api/client"
-          ID="b072ff89"
+          BASE="https://panel.ronzzyt.id/api/client"
+          ID="c16009d4"
           AUTH=(-H "Authorization: Bearer $PTERO_API_KEY" -H "Accept: application/json")
 
           res=$(curl -fsS "${AUTH[@]}" "$BASE/servers/$ID/resources")
@@ -34,7 +34,7 @@ jobs:
           suspended=$(jq -r '.attributes.is_suspended' <<<"$res")
           echo "state=$state suspended=$suspended"
 
-          if [ "$state" = "running" ] || [ "$suspended" = "true" ]; then
+          if [ "$state" = "running" ] || [ "$state" = "starting" ] || [ "$suspended" = "true" ]; then
             echo "No action needed"
             exit 0
           fi
