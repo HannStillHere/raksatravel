@@ -1,17 +1,17 @@
 {
-  "name": "raksa-wa-bot",
+  "name": "raksa-wa-baileys-cloud",
   "version": "1.0.0",
-  "description": "Real-time WhatsApp Channel Promo Listener for Raksa Travel",
+  "description": "24/7 Cloud Native WhatsApp Channel Promo Bot using Baileys",
   "main": "bot.cjs",
   "scripts": {
     "start": "node bot.cjs"
   },
   "dependencies": {
-    "@google/genai": "^2.19.0",
+    "@whiskeysockets/baileys": "^6.7.13",
     "express": "^5.2.1",
+    "pino": "^9.6.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "tesseract.js": "^5.1.1",
-    "whatsapp-web.js": "^1.26.0"
+    "sharp": "^0.33.5"
   }
 }

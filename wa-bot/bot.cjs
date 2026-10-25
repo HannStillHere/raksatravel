@@ -11,11 +11,17 @@ const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const sharp = require('sharp');
 
-// Unhandled exception guards to prevent process exit
+let sharp;
+try {
+  sharp = require('sharp');
+} catch (e) {
+  sharp = null;
+}
+
+// Global process exception handlers
 process.on('uncaughtException', (err) => {
-  console.error('⚠️ [UNCAUGHT EXCEPTION]:', err.message || err);
+  console.error('⚠️ [UNCAUGHT EXCEPTION]:', err?.message || err);
 });
 process.on('unhandledRejection', (reason) => {
   console.error('⚠️ [UNHANDLED REJECTION]:', reason?.message || reason);
@@ -37,6 +43,18 @@ try {
   }
 } catch (e) {}
 
+const N8N_PROMO_WEBHOOK = process.env.N8N_PROMO_WEBHOOK || 'http://38.49.215.28:3014/webhook/raksa-promo';
+function tapToN8nPromo(data) {
+  try {
+    fetch(N8N_PROMO_WEBHOOK, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: AbortSignal.timeout(3000)
+    }).catch(() => {});
+  } catch {}
+}
+
 let latestQrDataUrl = '';
 let latestQrRaw = '';
 let authStatus = 'Menunggu Inisialisasi WhatsApp Cloud...';
@@ -47,10 +65,9 @@ let metadataRetryInterval = null;
 let isProcessingQueue = false;
 let globalSock = null;
 
-// Persistent processed messages file
+// Persistent processed messages tracking
 const PROCESSED_DB_FILE = path.join(__dirname, 'processed_messages.json');
 let processedMessageIds = new Set();
-
 try {
   if (fs.existsSync(PROCESSED_DB_FILE)) {
     const raw = JSON.parse(fs.readFileSync(PROCESSED_DB_FILE, 'utf-8'));
@@ -62,17 +79,18 @@ try {
   processedMessageIds = new Set();
 }
 
-function saveProcessedMessageId(msgId) {
-  if (!msgId) return;
-  processedMessageIds.add(msgId);
+function saveProcessedMessageId(id) {
+  if (!id) return;
+  processedMessageIds.add(id);
   try {
-    const arr = Array.from(processedMessageIds).slice(-300); // keep last 300 IDs
+    const arr = Array.from(processedMessageIds);
+    if (arr.length > 500) arr.splice(0, arr.length - 500);
     fs.writeFileSync(PROCESSED_DB_FILE, JSON.stringify(arr, null, 2), 'utf-8');
   } catch (e) {}
 }
 
 function logSync(msg) {
-  const timeStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jayapura' });
+  const timeStr = new Date().toLocaleTimeString('id-ID');
   console.log(`[${timeStr}] ${msg}`);
   syncLogHistory.unshift(`[${timeStr}] ${msg}`);
   if (syncLogHistory.length > 50) syncLogHistory.pop();
@@ -80,14 +98,16 @@ function logSync(msg) {
 
 console.log('====================================================');
 console.log('🤖 RAKSA TRAVEL - 24/7 AUTO CLOUD BAILEYS BOT');
-console.log(' Channel Target:', TARGET_CHANNEL_CODE);
-console.log(' GitHub Target: ', GITHUB_REPO);
+console.log(' Channel Target: ', TARGET_CHANNEL_CODE);
+console.log(' GitHub Target:  ', GITHUB_REPO);
 console.log('====================================================\n');
 
-// 1. IATA Airport & City Reference Map
+// 1. IATA Airport Reference Map
 const IATA_MAP = {
   'jayapura': 'DJJ',
+  'sentani': 'DJJ',
   'makassar': 'UPG',
+  'ujung pandang': 'UPG',
   'surabaya': 'SUB',
   'jakarta': 'CGK',
   'denpasar': 'DPS',
@@ -114,64 +134,225 @@ const IATA_MAP = {
   'kendari': 'KDI',
   'gorontalo': 'GTO',
   'palu': 'PLW',
-  'ternate': 'TTE',
-  'kupang': 'KOE',
-  'labuan bajo': 'LBJ',
-  'lombok': 'LOP'
+  'wamena': 'WMX'
 };
 
 function resolveIataCode(cityName, defaultCode = 'DJJ') {
   if (!cityName) return defaultCode;
   const clean = cityName.toLowerCase().trim();
-  for (const [city, code] of Object.entries(IATA_MAP)) {
-    if (clean.includes(city)) return code;
+  for (const [key, code] of Object.entries(IATA_MAP)) {
+    if (clean.includes(key)) return code;
   }
   return defaultCode;
 }
 
-// 2. High-Accuracy AI Vision Multimodal OCR with Multi-Model Cascade
-async function analyzeImageWithAiVision(base64Data, captionHint = '') {
-  const prompt = `Anda adalah AI Vision & OCR Engine tingkat tinggi spesialis membaca poster promo tiket pesawat & kapal laut resmi untuk Raksa Travel.
+const CITY_LIST = [
+  'MAKASSAR', 'JAYAPURA', 'SURABAYA', 'JAKARTA', 'TIMIKA', 'MERAUKE', 'SORONG',
+  'BIAK', 'MANOKWARI', 'WAMENA', 'NABIRE', 'DENPASAR', 'BALI', 'YOGYAKARTA',
+  'JOGJA', 'SEMARANG', 'BALIKPAPAN', 'BANJARMASIN', 'PONTIANAK', 'MEDAN',
+  'PADANG', 'PALEMBANG', 'PEKANBARU', 'BATAM', 'KENDARI', 'GORONTALO',
+  'PALU', 'AMBON', 'TERNATE', 'KUPANG', 'LABUAN BAJO'
+];
 
-TUGAS UTAMA:
-Lakukan pemindaian visual OCR ultra-teliti dari gambar poster tiket promo ini.
-${captionHint ? `Petunjuk Teks Tambahan dari Pengirim/Caption: "${captionHint}"` : ''}
-
-ATURAN VALIDASI KETAT TEMPLATE RAKSA TRAVEL:
-1. Jika gambar BUKAN poster promo tiket perjalanan/penerbangan/kapal laut resmi (misalnya: foto selfie, foto orang, cosplay, anime, manga, meme, screenshot chat pribadi, struk belanja, video/youtube thumbnail non-promo), KEMBALIKAN JSON PERSIS:
-{"is_valid": false}
-
-2. Poster promo tiket resmi Raksa Travel memiliki 2 format sah:
-A. Poster Flyer Grafis / Maskapai Resmi (berisi logo/nama maskapai, pesawat, rute, harga, tanggal).
-B. Kartu Teks Status / Story Promo Resmi Raksa Travel:
-- Berlatar warna solid/gradien (pink, ungu, hijau, biru, magenta, dll) dengan teks tebal terpusat di tengah.
-- Menyebutkan maskapai + tipe: "LION LANGSUNG", "LION TRANSIT", "BATIK LANGSUNG", "SRIWIJAYA TRANSIT", "GARUDA", "CITILINK", "PELNI", dll.
-- Menyebutkan rute: "MAKASSAR JAYAPURA", "JAYAPURA MAKASSAR", "JAYAPURA SURABAYA", "JAYAPURA JAKARTA", dll.
-- Menyebutkan harga tiket (misal 2,645,000 / 2,290,000 / 2,360,000 / 2,910,000 / 3,250,000 / 2,450,000 baik pemisah koma maupun titik).
-- Menyebutkan tanggal/bulan (misal OKTOBER, NOVEMBER, Tgl 18-26, dll).
-- Sering disertai "BAGASI .. KG" dan nomor kontak "WA 082153043601".
-KEDUA FORMAT INI ADALAH POSTER PROMO RESMI RAKSA TRAVEL YANG VALID 100%. Kembalikan {"is_valid": true} dan ekstrak datanya.
-
-3. Jika gambar MEMENUHI syarat di atas, ekstrak datanya dalam format JSON murni:
-{
-  "is_valid": true,
-  "badge": "Nama maskapai/operator resmi dalam huruf kapital (contoh: LION AIR, BATIK AIR, SRIWIJAYA AIR, CITILINK, GARUDA INDONESIA, SUPER AIR JET, WINGS AIR, PELNI, KM LABOBAR, KM DOBONSOLO)",
-  "badgeType": "airline atau ship",
-  "origin": "Nama kota asal keberangkatan (contoh: Jayapura, Makassar, Surabaya, Jakarta, Denpasar, Timika, Biak, Sorong, Nabire, Merauke)",
-  "originCode": "Kode bandara asal 3 huruf resmi IATA (contoh: DJJ, UPG, SUB, CGK, DPS, TIM, BIK, SOQ, NBX, MKQ)",
-  "destination": "Nama kota tujuan (contoh: Makassar, Jayapura, Surabaya, Jakarta, Denpasar, Timika, Biak, Sorong, Nabire, Merauke)",
-  "destinationCode": "Kode bandara tujuan 3 huruf resmi IATA (contoh: UPG, DJJ, SUB, CGK, DPS, TIM, BIK, SOQ, NBX, MKQ)",
-  "transit": "Tipe rute persis (contoh: Penerbangan Langsung / Penerbangan Transit / Transit Makassar / Transit Surabaya / Transit 1X / Kapal Laut Langsung)",
-  "price": "Nominal harga termurah (HANYA ANGKA dengan pemisah titik ribuan, tanpa kata Rp, contoh: 2.220.000 / 2.290.000 / 3.305.000 / 3.475.000 / 3.695.000 / 1.850.000)",
-  "date": "Daftar tanggal/periode jadwal keberangkatan persis seperti di poster (contoh: 17, 18, 22 Okt / Tgl 19 s/d 29 Oktober)",
-  "baggage": "Keterangan jatah bagasi resmi (contoh: Termasuk Bagasi 10 KG / Termasuk Bagasi 15 KG / Termasuk Bagasi 20 KG / Free Bagasi Kabin 7 KG / Tanpa Bagasi)",
-  "phone": "Nomor kontak WhatsApp yang tertera di poster jika ada (contoh: 082153043601)"
+function detectRouteFromText(textUp) {
+  const found = [];
+  for (const c of CITY_LIST) {
+    const idx = textUp.indexOf(c);
+    if (idx !== -1) {
+      const cap = c.charAt(0) + c.slice(1).toLowerCase();
+      found.push({ idx, name: cap });
+    }
+  }
+  found.sort((a, b) => a.idx - b.idx);
+  if (found.length >= 2) return [found[0].name, found[1].name];
+  if (found.length === 1) return found[0].name === 'Jayapura' ? ['Makassar', 'Jayapura'] : [found[0].name, 'Jayapura'];
+  return ['Makassar', 'Jayapura'];
 }
 
-PANDUAN PEMBACAAN OCR:
-- Periksa angka harga, rute asal-tujuan, dan daftar tanggal keberangkatan dengan sangat cermat.
-- Jangan tertukar antara kota asal (Origin) dan kota tujuan (Destination). Perhatikan tanda panah (-> atau -) pada poster.
-- HANYA KEMBALIKAN JSON VALID MURNI TANPA MARKDOWN / PENJELASAN.`;
+// 2. High-Accuracy Fallback Regex Parser for Raksa Travel Story Cards
+function parseMultiPromoText(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  const clean = raw.replace(/\r/g, '').trim();
+  const lines = clean.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+
+  const fullTextUpper = clean.toUpperCase();
+
+  // Validasi format: Wajib ada indikasi promo tiket / Raksa Travel
+  const hasPromoKeywords = fullTextUpper.includes('LANGSUNG') || 
+                           fullTextUpper.includes('TRANSIT') || 
+                           fullTextUpper.includes('BAGASI') || 
+                           fullTextUpper.includes('082153043601') || 
+                           fullTextUpper.includes('RAKSA') ||
+                           fullTextUpper.includes('TGL');
+  if (!hasPromoKeywords) return [];
+
+  // 1. Detect Default Header Airline & Transit Mode
+  let defaultBadge = '';
+  let defaultTransit = 'Penerbangan Langsung';
+  let defaultBadgeType = 'airline';
+
+  if (fullTextUpper.includes('CITILINK')) defaultBadge = 'CITILINK';
+  else if (fullTextUpper.includes('BATIK')) defaultBadge = 'BATIK AIR';
+  else if (fullTextUpper.includes('LION')) defaultBadge = 'LION AIR';
+  else if (fullTextUpper.includes('SRIWIJAYA')) defaultBadge = 'SRIWIJAYA AIR';
+  else if (fullTextUpper.includes('GARUDA')) defaultBadge = 'GARUDA INDONESIA';
+  else if (fullTextUpper.includes('SUPER AIR JET') || fullTextUpper.includes('SUPER AIR')) defaultBadge = 'SUPER AIR JET';
+  else if (fullTextUpper.includes('WINGS')) defaultBadge = 'WINGS AIR';
+  else if (fullTextUpper.includes('PELNI') || fullTextUpper.includes('KAPAL')) {
+    defaultBadge = 'PELNI';
+    defaultBadgeType = 'ship';
+    defaultTransit = 'Pelayaran Laut';
+  }
+
+  if (fullTextUpper.includes('TRANSIT')) defaultTransit = 'Penerbangan Transit';
+  else if (fullTextUpper.includes('LANGSUNG')) defaultTransit = 'Penerbangan Langsung';
+
+  // 2. Extract Route (Origin & Destination)
+  const [origin, dest] = detectRouteFromText(fullTextUpper);
+  if (!origin || !dest) return [];
+
+  // 3. Extract Date
+  let date = 'Keberangkatan Terdekat';
+  const dateMatch = clean.match(/(?:TGL\s*)?([0-9]{1,2}(?:\s*[-–,\s]\s*[0-9]{1,2})*\s*(?:JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER))/i) ||
+                    clean.match(/TGL\s*([0-9\s,\-–sampai]+(?:\s+[A-Za-z]+)?)/i);
+  if (dateMatch) {
+    const rawDate = dateMatch[1].trim().replace(/^tgl\s*/i, '');
+    date = 'Tgl ' + rawDate;
+  }
+
+  const items = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const priceMatch = line.match(/(?:RP\.?\s*)?(\d{1,3}(?:[.,]\d{3})+)/i);
+    if (priceMatch) {
+      const numVal = parseInt(priceMatch[1].replace(/[.,]/g, ''), 10);
+      if (numVal < 300000) continue; // Skip sanity check
+
+      let cleanPrice = priceMatch[1].replace(/,/g, '.');
+      let badge = defaultBadge;
+      let transit = defaultTransit;
+      let badgeType = defaultBadgeType;
+
+      const lineUp = line.toUpperCase();
+      if (lineUp.includes('BATIK')) badge = 'BATIK AIR';
+      else if (lineUp.includes('LION')) badge = 'LION AIR';
+      else if (lineUp.includes('SRIWIJAYA')) badge = 'SRIWIJAYA AIR';
+      else if (lineUp.includes('CITILINK')) badge = 'CITILINK';
+      else if (lineUp.includes('GARUDA')) badge = 'GARUDA INDONESIA';
+      else if (lineUp.includes('SUPER') && lineUp.includes('AIR')) badge = 'SUPER AIR JET';
+      else if (lineUp.includes('PELNI') || lineUp.includes('KAPAL')) {
+        badge = 'PELNI'; badgeType = 'ship'; transit = 'Pelayaran Laut';
+      }
+
+      if (!badge) continue;
+
+      if (lineUp.includes('TRANSIT')) transit = 'Penerbangan Transit';
+      else if (lineUp.includes('LANGSUNG')) transit = 'Penerbangan Langsung';
+
+      // Baggage check on this line, next line, or previous line
+      let baggage = badgeType === 'ship' ? 'Termasuk Bagasi Kapal' : 'Termasuk Bagasi 10 KG';
+      if (badge === 'BATIK AIR') baggage = 'Termasuk Bagasi 20 KG';
+      else if (badge === 'CITILINK') baggage = 'Termasuk Bagasi 20 KG';
+
+      const combinedBaggageText = (line + ' ' + (lines[i + 1] || '') + ' ' + (lines[i - 1] || '')).toUpperCase();
+      const bagMatch = combinedBaggageText.match(/BAGASI\s*(\d+)(?:\s*KG)?/i);
+      if (bagMatch) {
+        baggage = 'Termasuk Bagasi ' + bagMatch[1] + ' KG';
+      }
+
+      // Check specific date on line if present
+      let itemDate = date;
+      const specificDateMatch = line.match(/Tgl\s*([0-9\s,\-–sampai]+(?:\s+[A-Za-z]+)?)/i);
+      if (specificDateMatch) {
+        itemDate = 'Tgl ' + specificDateMatch[1].trim().replace(/^tgl\s*/i, '');
+      }
+
+      items.push({
+        badge,
+        badgeType,
+        airlineLogo: badgeType === 'ship' ? 'ship' : 'plane',
+        title: `${badge} ${origin} - ${dest}`,
+        desc: `Rp ${cleanPrice} • ${itemDate} • ${transit} • ${baggage}`,
+        price: cleanPrice,
+        date: itemDate,
+        transit,
+        baggage,
+        origin,
+        originCode: resolveIataCode(origin, 'UPG'),
+        destination: dest,
+        destinationCode: resolveIataCode(dest, 'DJJ'),
+        waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badge} ${origin} - ${dest} Rp ${cleanPrice} (${itemDate})`)
+      });
+    }
+  }
+
+  return items;
+}
+
+// 3. Multi-Model Cascade AI Vision Parser (Gemini 3.7 / 3.8 / Fallbacks)
+async function analyzeImageWithAiVision(base64Data, captionHint = '') {
+  const prompt = `Anda adalah AI Vision & OCR Engine spesialis membaca kartu poster promo resmi Raksa Travel.
+
+FORMAT RESMI POSTER PROMO RAKSA TRAVEL YANG WAJIB DISETUJUI:
+Poster bertipe WhatsApp Story / Status Card dengan latar belakang solid atau gradasi warna (contoh: pink/magenta, ungu, navy/biru dongker, hijau) dengan tipografi teks tebal di tengah.
+
+CONTOH FORMAT 1 (Multi Opsi / Baris):
+CITILINK LANGSUNG
+MAKASSAR JAYAPURA
+TGL 29 OKTOBER
+➡️3,040,000 Bagasi 15
+➡️3,100,000 Bagasi 20
+Wa082153043601
+
+CONTOH FORMAT 2 (Single Opsi):
+BATIK LANGSUNG
+MAKASSAR JAYAPURA
+3,090,000
+TGL 27 OKTOBER
+BAGASI 20 KG
+WA082153043601
+
+CONTOH FORMAT 3 (Multi Maskapai):
+MAKASSAR JAYAPURA TGL 29 OKTOBER
+➡️Lion Langsung 2,910,000 Bagasi 10
+➡️Batik Langsung 3,090,000 Bagasi 20
+Wa082153043601
+
+SYARAT VALIDASI MUTLAK:
+1. Gambar WAJIB merupakan kartu poster promo tiket pesawat / kapal resmi Raksa Travel dengan komponen:
+   - Nama Maskapai / Kapal (Citilink, Batik Air, Lion Air, Sriwijaya Air, Garuda Indonesia, Super Air Jet, Pelni, Wings Air)
+   - Rute Kota Asal & Tujuan (contoh: Makassar Jayapura)
+   - Tanggal keberangkatan (contoh: Tgl 29 Oktober, Tgl 27 Oktober)
+   - Nominal harga tiket (angka ribuan, contoh: 3,040,000 atau 3,090,000)
+   - Informasi bagasi (contoh: Bagasi 15, Bagasi 20 KG)
+2. JIKA GAMBAR BUKAN kartu poster promo tiket Raksa Travel (misalnya: foto manusia/selfie, struk transfer bank/bukti bayar, meme, pemandangan, screenshot chat biasa, brosur produk lain), ANDA WAJIB MENOLAKNYA dengan mengembalikan JSON persis:
+{"is_valid": false}
+
+3. JIKA VALID, ekstrak seluruh opsi tiket promo yang tertera ke dalam format JSON persis:
+{
+  "is_valid": true,
+  "origin": "Nama kota asal keberangkatan (contoh: Makassar)",
+  "originCode": "Kode 3 huruf IATA asal (contoh: UPG)",
+  "destination": "Nama kota tujuan (contoh: Jayapura)",
+  "destinationCode": "Kode 3 huruf IATA tujuan (contoh: DJJ)",
+  "date": "Tanggal atau periode keberangkatan (contoh: Tgl 29 Oktober)",
+  "promos": [
+    {
+      "badge": "LION AIR / BATIK AIR / CITILINK / SRIWIJAYA AIR / GARUDA INDONESIA / SUPER AIR JET / PELNI / WINGS AIR",
+      "badgeType": "airline atau ship",
+      "transit": "Penerbangan Langsung / Penerbangan Transit / Pelayaran Laut",
+      "price": "Nominal angka harga dengan titik ribuan (contoh: 3.040.000)",
+      "date": "Tanggal keberangkatan opsi ini (contoh: Tgl 29 Oktober)",
+      "baggage": "Keterangan bagasi (contoh: Termasuk Bagasi 15 KG / Termasuk Bagasi 20 KG)"
+    }
+  ]
+}
+
+PANDUAN KETAT:
+- Pastikan Origin (Kota Asal) dan Destination (Kota Tujuan) TIDAK tertukar.
+- Ekstrak SEMUA opsi harga yang ada di kartu promo (jangan hanya satu jika tertera lebih dari 1 baris).
+- HANYA KEMBALIKAN JSON VALID MURNI TANPA MARKDOWN ATAU PENJELASAN LAIN.`;
 
   const fallbackModels = [
     'ag/gemini-3.7-flash-high',
@@ -195,7 +376,7 @@ PANDUAN PEMBACAAN OCR:
             {
               role: 'user',
               content: [
-                { type: 'text', text: prompt },
+                { type: 'text', text: prompt + (captionHint ? `\nPetunjuk Teks Caption: "${captionHint}"` : '') },
                 {
                   type: 'image_url',
                   image_url: {
@@ -234,229 +415,105 @@ PANDUAN PEMBACAAN OCR:
         if (!jsonMatch) continue;
 
         const data = JSON.parse(jsonMatch[0]);
-
-        if (data.is_valid !== true || !data.origin || !data.destination || !data.price) {
-          console.log(`⚠️ AI Vision (${modelName}): Gambar BUKAN poster promo resmi atau rute/harga tidak lengkap.`);
+        if (data.is_valid !== true || !data.origin || !data.destination) {
           continue;
         }
 
-        let cleanPrice = String(data.price).replace(/Rp\.?\s*/i, '').replace(/,/g, '.').replace(/[^\d.]/g, '').trim();
-        // Jika angka polos tanpa titik (misal 2290000), format ke 2.290.000
-        if (/^\d{6,8}$/.test(cleanPrice)) {
-          cleanPrice = Number(cleanPrice).toLocaleString('id-ID');
+        const origin = data.origin;
+        const dest = data.destination;
+        const originCode = data.originCode || resolveIataCode(origin, 'UPG');
+        const destCode = data.destinationCode || resolveIataCode(dest, 'DJJ');
+        const defaultDate = data.date || 'Keberangkatan Terdekat';
+
+        let rawPromos = [];
+        if (Array.isArray(data.promos) && data.promos.length > 0) {
+          rawPromos = data.promos;
+        } else if (data.price) {
+          rawPromos = [{
+            badge: data.badge,
+            badgeType: data.badgeType,
+            transit: data.transit,
+            price: data.price,
+            date: data.date,
+            baggage: data.baggage
+          }];
         }
 
-        const numPrice = parseInt(cleanPrice.replace(/\./g, ''), 10);
-        if (isNaN(numPrice) || numPrice < 500000) {
-          console.log(`⚠️ AI Vision (${modelName}): Harga tidak valid (< 500.000): ${cleanPrice}`);
-          continue;
+        const validPromos = [];
+        for (const p of rawPromos) {
+          if (!p.price) continue;
+          let cleanPrice = String(p.price).replace(/Rp\.?\s*/i, '').replace(/,/g, '.').replace(/[^\d.]/g, '').trim();
+          if (/^\d{6,8}$/.test(cleanPrice)) {
+            cleanPrice = Number(cleanPrice).toLocaleString('id-ID');
+          }
+          const numPrice = parseInt(cleanPrice.replace(/\./g, ''), 10);
+          if (isNaN(numPrice) || numPrice < 300000) continue;
+
+          let badgeName = (p.badge || 'LION AIR').toUpperCase();
+          if (badgeName.includes('BATIK')) badgeName = 'BATIK AIR';
+          else if (badgeName.includes('LION')) badgeName = 'LION AIR';
+          else if (badgeName.includes('SRIWIJAYA')) badgeName = 'SRIWIJAYA AIR';
+          else if (badgeName.includes('GARUDA')) badgeName = 'GARUDA INDONESIA';
+          else if (badgeName.includes('CITILINK')) badgeName = 'CITILINK';
+          else if (badgeName.includes('SUPER') && badgeName.includes('AIR')) badgeName = 'SUPER AIR JET';
+          else if (badgeName.includes('PELNI') || badgeName.includes('KAPAL')) badgeName = 'PELNI';
+
+          let transitType = p.transit || (badgeName === 'PELNI' ? 'Pelayaran Laut' : 'Penerbangan Langsung');
+          if (String(p.badge).toUpperCase().includes('TRANSIT')) transitType = 'Penerbangan Transit';
+
+          const itemDate = p.date || defaultDate;
+          let baggageText = p.baggage || (badgeName === 'PELNI' ? 'Termasuk Bagasi Kapal' : (badgeName === 'BATIK AIR' ? 'Termasuk Bagasi 20 KG' : 'Termasuk Bagasi 10 KG'));
+
+          validPromos.push({
+            badge: badgeName,
+            badgeType: badgeName === 'PELNI' ? 'ship' : 'airline',
+            airlineLogo: badgeName === 'PELNI' ? 'ship' : 'plane',
+            origin,
+            originCode,
+            destination: dest,
+            destinationCode: destCode,
+            title: `${badgeName} ${origin} - ${dest}`,
+            desc: `Rp ${cleanPrice} • ${itemDate} • ${transitType} • ${baggageText}`,
+            transit: transitType,
+            price: cleanPrice,
+            date: itemDate,
+            baggage: baggageText,
+            waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badgeName} ${origin} - ${dest} Rp ${cleanPrice} (${itemDate})`)
+          });
         }
 
-        let badgeName = (data.badge || '').toUpperCase();
-        if (badgeName.includes('LION')) badgeName = 'LION AIR';
-        else if (badgeName.includes('BATIK')) badgeName = 'BATIK AIR';
-        else if (badgeName.includes('SRIWIJAYA')) badgeName = 'SRIWIJAYA AIR';
-        else if (badgeName.includes('GARUDA')) badgeName = 'GARUDA INDONESIA';
-        else if (badgeName.includes('CITILINK')) badgeName = 'CITILINK';
-        else if (badgeName.includes('SUPER') && badgeName.includes('AIR')) badgeName = 'SUPER AIR JET';
-        else if (badgeName.includes('WINGS')) badgeName = 'WINGS AIR';
-        else if (badgeName.includes('PELNI') || badgeName.includes('KM ') || badgeName.includes('KAPAL')) badgeName = 'PELNI';
-        else {
-          console.log(`⚠️ AI Vision (${modelName}): Maskapai/operator tidak dikenal (${data.badge}), ditolak.`);
-          continue;
+        if (validPromos.length > 0) {
+          console.log(`✨ [AI VISION SUKSES via ${modelName}]: ${validPromos.length} Promo tervalidasi (${validPromos.map(x => `${x.badge} Rp ${x.price}`).join(', ')})`);
+          return validPromos;
         }
-
-        let transitType = data.transit || 'Penerbangan Langsung';
-        if (String(data.badge).toUpperCase().includes('TRANSIT') || String(data.transit).toUpperCase().includes('TRANSIT')) {
-          transitType = 'Penerbangan Transit';
-        } else if (String(data.badge).toUpperCase().includes('LANGSUNG') || String(data.transit).toUpperCase().includes('LANGSUNG')) {
-          transitType = 'Penerbangan Langsung';
-        }
-
-        const originCode = data.originCode || resolveIataCode(data.origin, 'DJJ');
-        const destCode = data.destinationCode || resolveIataCode(data.destination, 'UPG');
-
-        console.log(`✨ [AI VISION VALIDASI SUKSES via ${modelName}]: ${badgeName} | ${data.origin} (${originCode}) -> ${data.destination} (${destCode}) | Rp ${cleanPrice}`);
-
-        return {
-          id: `promo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          badge: badgeName,
-          badgeType: badgeName === 'PELNI' ? 'ship' : 'airline',
-          airlineLogo: badgeName === 'PELNI' ? 'ship' : 'plane',
-          origin: data.origin,
-          originCode: originCode,
-          destination: data.destination,
-          destinationCode: destCode,
-          transit: transitType,
-          price: cleanPrice,
-          date: data.date || 'Keberangkatan Terdekat',
-          baggage: data.baggage || 'Termasuk Bagasi',
-          waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badgeName} ${data.origin} - ${data.destination} Rp ${cleanPrice} (${data.date || ''})`)
-        };
       }
     } catch (err) {
       console.log(`AI Vision error on ${modelName}:`, err.message);
     }
   }
 
-  // Strict Regex Fallback ONLY IF caption contains complete verified promo details
+  // Regex fallback if AI unavailable
   if (captionHint) {
-    const text = captionHint.toUpperCase();
-    const priceMatch = text.match(/(?:RP\.?\s*)?(\d{1,3}(?:\.\d{3})+)/);
-    if (priceMatch) {
-      const numVal = parseInt(priceMatch[1].replace(/\./g, ''), 10);
-      if (numVal >= 500000) {
-        let badge = null;
-        if (text.includes('LION')) badge = 'LION AIR';
-        else if (text.includes('BATIK')) badge = 'BATIK AIR';
-        else if (text.includes('SRIWIJAYA')) badge = 'SRIWIJAYA AIR';
-        else if (text.includes('CITILINK')) badge = 'CITILINK';
-        else if (text.includes('GARUDA')) badge = 'GARUDA INDONESIA';
-        else if (text.includes('SUPER AIR JET')) badge = 'SUPER AIR JET';
-        else if (text.includes('PELNI') || text.includes('KAPAL')) badge = 'PELNI';
-
-        if (badge) {
-          let origin = null;
-          let dest = null;
-          if (text.includes('MAKASSAR - JAYAPURA') || text.includes('MAKASSAR KE JAYAPURA') || text.includes('UPG - DJJ') || text.includes('UPG KE DJJ')) {
-            origin = 'Makassar'; dest = 'Jayapura';
-          } else if (text.includes('JAYAPURA - MAKASSAR') || text.includes('JAYAPURA KE MAKASSAR') || text.includes('DJJ - UPG') || text.includes('DJJ KE UPG')) {
-            origin = 'Jayapura'; dest = 'Makassar';
-          } else if (text.includes('SURABAYA - JAYAPURA') || text.includes('SUB - DJJ')) {
-            origin = 'Surabaya'; dest = 'Jayapura';
-          } else if (text.includes('JAYAPURA - SURABAYA') || text.includes('DJJ - SUB')) {
-            origin = 'Jayapura'; dest = 'Surabaya';
-          } else if (text.includes('JAKARTA - JAYAPURA') || text.includes('CGK - DJJ')) {
-            origin = 'Jakarta'; dest = 'Jayapura';
-          } else if (text.includes('JAYAPURA - JAKARTA') || text.includes('DJJ - CGK')) {
-            origin = 'Jayapura'; dest = 'Jakarta';
-          }
-
-          if (origin && dest) {
-            console.log(`⚡ [STRICT CAPTION EXTRACTED]: ${badge} ${origin}-${dest} Rp ${priceMatch[1]}`);
-            return {
-              id: `promo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-              badge: badge,
-              badgeType: badge === 'PELNI' ? 'ship' : 'airline',
-              airlineLogo: badge === 'PELNI' ? 'ship' : 'plane',
-              origin: origin,
-              originCode: resolveIataCode(origin, 'DJJ'),
-              destination: dest,
-              destinationCode: resolveIataCode(dest, 'UPG'),
-              transit: text.includes('TRANSIT') ? 'Penerbangan Transit' : 'Penerbangan Langsung',
-              price: priceMatch[1],
-              date: 'Keberangkatan Terdekat',
-              baggage: 'Termasuk Bagasi',
-              waText: encodeURIComponent(`Halo RaksaTravel, saya mau ambil tiket promo ${badge} ${origin} - ${dest} Rp ${priceMatch[1]}`)
-            };
-          }
-        }
-      }
+    const fallbackList = parseMultiPromoText(captionHint);
+    if (fallbackList.length > 0) {
+      console.log(`⚡ [FALLBACK REGEX SUKSES]: ${fallbackList.length} Promo diekstrak dari caption`);
+      return fallbackList;
     }
   }
 
-  return null;
+  return [];
 }
 
-// 2. Atomic GitHub REST API Committer with Retry on 409 Conflict
-async function commitPromosToGitHub(newPromo) {
-  if (!GITHUB_TOKEN) return false;
-
-  const fileUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/promos.json`;
-  const ghHeaders = {
-    'User-Agent': 'Raksa-Baileys-Cloud-Bot',
-    'Authorization': `token ${GITHUB_TOKEN}`,
-    'Accept': 'application/vnd.github.v3+json'
-  };
-
-  // Also update local file if exists
-  try {
-    const localPath = path.join(__dirname, '..', 'promos.json');
-    if (fs.existsSync(localPath)) {
-      let localList = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
-      const existingIdx = localList.findIndex(p => p.badge === newPromo.badge && p.origin === newPromo.origin && p.destination === newPromo.destination);
-      if (existingIdx !== -1) {
-        localList.splice(existingIdx, 1);
-      }
-      localList.unshift(newPromo);
-      localList = localList.slice(0, 12);
-      fs.writeFileSync(localPath, JSON.stringify(localList, null, 2), 'utf-8');
-    }
-  } catch (e) {}
-
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      let currentPromos = [];
-      let sha = '';
-      const getRes = await fetch(fileUrl, { headers: ghHeaders });
-      if (getRes.ok) {
-        const fileData = await getRes.json();
-        sha = fileData.sha || '';
-        const decoded = Buffer.from(fileData.content, 'base64').toString('utf-8');
-        currentPromos = JSON.parse(decoded);
-      }
-
-      const isExactDuplicate = currentPromos.some(p => p.badge === newPromo.badge && p.origin === newPromo.origin && p.destination === newPromo.destination && p.price === newPromo.price && p.date === newPromo.date);
-      if (isExactDuplicate) {
-        console.log('ℹ️ Promo ini sudah terdaftar persis di promos.json. Melewati duplikat.');
-        return true;
-      }
-
-      const existingIdx = currentPromos.findIndex(p => p.badge === newPromo.badge && p.origin === newPromo.origin && p.destination === newPromo.destination);
-      if (existingIdx !== -1) {
-        console.log(`🔄 Menggantikan promo lama (${currentPromos[existingIdx].badge} ${currentPromos[existingIdx].origin}-${currentPromos[existingIdx].destination} Rp ${currentPromos[existingIdx].price}) dengan promo terbaru (Rp ${newPromo.price})...`);
-        currentPromos.splice(existingIdx, 1);
-      }
-
-      currentPromos.unshift(newPromo);
-      currentPromos = currentPromos.slice(0, 12);
-      const updatedJson = JSON.stringify(currentPromos, null, 2);
-
-      const putRes = await fetch(fileUrl, {
-        method: 'PUT',
-        headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `auto: live promo update [${newPromo.badge} ${newPromo.origin}-${newPromo.destination}] from Cloud Baileys Bot`,
-          content: Buffer.from(updatedJson).toString('base64'),
-          sha: sha || undefined
-        })
-      });
-
-      if (putRes.ok) {
-        console.log(`🎉 [GITHUB PUSH] Sukses update promos.json di website raksatravel.github.io!`);
-        logSync(`Deploy Promo: ${newPromo.badge} ${newPromo.origin} -> ${newPromo.destination} (Rp ${newPromo.price})`);
-        return true;
-      } else if (putRes.status === 409) {
-        console.warn(`⚠️ [GITHUB 409 CONFLICT] Retrying promos.json commit (attempt ${attempt}/3)...`);
-        await new Promise(r => setTimeout(r, 1000 * attempt));
-        continue;
-      } else {
-        const errText = await putRes.text();
-        console.error(`❌ [GITHUB ERROR promos.json]: HTTP ${putRes.status} - ${errText}`);
-        return false;
-      }
-    } catch (e) {
-      console.error('Error committing to GitHub promos.json:', e.message);
-    }
-  }
-  return false;
-}
-
-// 3. Helper: Compress image to optimized progressive MozJPEG (ultra HD clear text & vivid realism)
+// 4. MozJPEG Progressive Image Compression via Sharp
 async function compressImageBuffer(inputBuffer) {
+  if (!sharp) return inputBuffer;
   try {
     return await sharp(inputBuffer)
-      .rotate() // Auto-orient berdasarkan metadata EXIF
       .resize({
-        width: 1400,
-        height: 1400,
+        width: 1080,
+        height: 1920,
         fit: 'inside',
         withoutEnlargement: true
-      })
-      .sharpen({
-        sigma: 1.0,
-        m1: 0.7,
-        m2: 0.2
       })
       .jpeg({
         quality: 88,
@@ -471,164 +528,221 @@ async function compressImageBuffer(inputBuffer) {
   }
 }
 
-// 4. Upload Poster and update promo-posters.json with 409 Retry
-async function uploadPosterToGitHub(base64ImageData, promoData, rawBuffer = null) {
-  const timestamp = Date.now();
-  const fileName = `images/promo-${timestamp}.jpeg`;
+// 5. GitHub API Helper Functions
+const ghHeaders = () => ({
+  'User-Agent': 'Raksa-Baileys-Cloud-Bot',
+  'Authorization': `token ${GITHUB_TOKEN}`,
+  'Accept': 'application/vnd.github.v3+json'
+});
 
-  // 1. Simpan salinan lokal jika folder website tersedia
-  try {
-    const localImgPath = path.join(__dirname, '..', fileName);
-    const localImgDir = path.dirname(localImgPath);
-    if (fs.existsSync(localImgDir)) {
-      fs.writeFileSync(localImgPath, rawBuffer || Buffer.from(base64ImageData, 'base64'));
-      console.log(`💾 [LOKAL] Poster disimpan: ${localImgPath}`);
-    }
-
-    const localPostersPath = path.join(__dirname, '..', 'promo-posters.json');
-    if (fs.existsSync(localPostersPath)) {
-      let localPosters = JSON.parse(fs.readFileSync(localPostersPath, 'utf-8'));
-      const descText = promoData.price 
-        ? `Rp ${promoData.price} • ${promoData.date} • ${promoData.transit} • ${promoData.baggage}`
-        : `${promoData.date} • ${promoData.transit}`;
-      
-      const newPosterObj = {
-        id: `poster-${timestamp}`,
-        image: fileName,
-        badge: promoData.badge || 'TIKET PROMO',
-        badgeType: promoData.badgeType || 'airline',
-        title: `${promoData.badge} ${promoData.origin} - ${promoData.destination}`,
-        desc: descText,
-        price: promoData.price || '',
-        date: promoData.date || '',
-        waText: promoData.waText || '',
-        addedAt: new Date().toISOString()
-      };
-
-      const existingPosterIdx = localPosters.findIndex(p => 
-        (p.badge === newPosterObj.badge && p.title.includes(promoData.origin) && p.title.includes(promoData.destination)) ||
-        p.title === newPosterObj.title
-      );
-      if (existingPosterIdx !== -1) {
-        localPosters.splice(existingPosterIdx, 1);
-      }
-      localPosters.unshift(newPosterObj);
-      localPosters = localPosters.slice(0, 12);
-      fs.writeFileSync(localPostersPath, JSON.stringify(localPosters, null, 2), 'utf-8');
-      console.log(`💾 [LOKAL] promo-posters.json diperbarui.`);
-    }
-  } catch (err) {
-    console.warn('Local save warning:', err.message);
-  }
-
+async function uploadImageToGitHub(fileName, base64ImageData, promo) {
   if (!GITHUB_TOKEN) return false;
+  const imgUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${fileName}`;
+  const res = await fetch(imgUrl, {
+    method: 'PUT',
+    headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: `auto: upload poster promo [${promo.badge} ${promo.origin}-${promo.destination}]`,
+      content: base64ImageData
+    })
+  });
+  if (!res.ok) {
+    console.error(`❌ [GITHUB ERROR upload image]: HTTP ${res.status}`);
+    return false;
+  }
+  return true;
+}
 
-  const ghHeaders = {
-    'User-Agent': 'Raksa-Baileys-Cloud-Bot',
-    'Authorization': `token ${GITHUB_TOKEN}`,
-    'Accept': 'application/vnd.github.v3+json'
-  };
+// Sync all promos to promo-posters.json and promos.json atomically
+async function syncAllPromosToGitHub(fileName, promoList) {
+  if (!GITHUB_TOKEN || !promoList || promoList.length === 0) return false;
+  const timestamp = Date.now();
 
-  try {
-    // 1. Upload Poster Image
-    const imgUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${fileName}`;
-    const putImgRes = await fetch(imgUrl, {
-      method: 'PUT',
-      headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: `auto: upload poster promo kompresi [${promoData.badge} ${promoData.origin}-${promoData.destination}]`,
-        content: base64ImageData
-      })
-    });
+  // A. Update promo-posters.json
+  const postersUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/promo-posters.json`;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      let posters = [];
+      let sha = '';
+      const getRes = await fetch(postersUrl, { headers: ghHeaders() });
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha || '';
+        posters = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf-8'));
+      }
 
-    if (!putImgRes.ok) {
-      const errImg = await putImgRes.text();
-      console.error(`❌ [GITHUB ERROR upload image]: HTTP ${putImgRes.status} - ${errImg}`);
-      return false;
-    }
-
-    // 2. Update promo-posters.json with 409 Conflict Retry
-    const postersUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/promo-posters.json`;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        let posters = [];
-        let sha = '';
-        const getRes = await fetch(postersUrl, { headers: ghHeaders });
-        if (getRes.ok) {
-          const fileData = await getRes.json();
-          sha = fileData.sha || '';
-          posters = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf-8'));
-        }
-
-        const descText = promoData.price 
-          ? `Rp ${promoData.price} • ${promoData.date} • ${promoData.transit} • ${promoData.baggage}`
-          : `${promoData.date} • ${promoData.transit}`;
-
+      for (let i = promoList.length - 1; i >= 0; i--) {
+        const promo = promoList[i];
         const newPoster = {
-          id: `poster-${timestamp}`,
+          id: `poster-${timestamp}-${i}`,
           image: fileName,
-          badge: promoData.badge || 'TIKET PROMO',
-          badgeType: promoData.badgeType || 'airline',
-          title: `${promoData.badge} ${promoData.origin} - ${promoData.destination}`,
-          desc: descText,
-          price: promoData.price || '',
-          date: promoData.date || '',
-          waText: promoData.waText || '',
+          badge: promo.badge,
+          badgeType: promo.badgeType,
+          title: promo.title,
+          desc: promo.desc,
+          price: promo.price,
+          date: promo.date,
+          waText: promo.waText,
           addedAt: new Date().toISOString()
         };
 
-        const isExactDup = posters.some(p => p.title === newPoster.title && p.price === newPoster.price && p.date === newPoster.date);
-        if (isExactDup) {
-          console.log('ℹ️ Poster ini sudah ada di promo-posters.json. Melewati upload poster.');
-          return true;
+        const dupIdx = posters.findIndex(p => p.title === newPoster.title && p.price === newPoster.price && p.date === newPoster.date);
+        if (dupIdx !== -1) {
+          posters.splice(dupIdx, 1);
         }
-
-        const existingPosterIdx = posters.findIndex(p => 
-          (p.badge === newPoster.badge && p.title.includes(promoData.origin) && p.title.includes(promoData.destination)) ||
-          p.title === newPoster.title
-        );
-        if (existingPosterIdx !== -1) {
-          console.log(`🔄 Menggantikan poster lama (${posters[existingPosterIdx].title}) dengan poster terbaru...`);
-          posters.splice(existingPosterIdx, 1);
-        }
-
         posters.unshift(newPoster);
-        posters = posters.slice(0, 12);
-
-        const putPostersRes = await fetch(postersUrl, {
-          method: 'PUT',
-          headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: 'auto: update poster gallery terkompresi dari Cloud Bot',
-            content: Buffer.from(JSON.stringify(posters, null, 2)).toString('base64'),
-            sha: sha || undefined
-          })
-        });
-
-        if (putPostersRes.ok) {
-          console.log(`🖼️ [GITHUB] Poster promo aktif di website: ${fileName}`);
-          logSync(`Upload Poster: ${promoData.badge} ${promoData.origin}-${promoData.destination}`);
-          return true;
-        } else if (putPostersRes.status === 409) {
-          console.warn(`⚠️ [GITHUB 409 CONFLICT] Retrying promo-posters.json (attempt ${attempt}/3)...`);
-          await new Promise(r => setTimeout(r, 1000 * attempt));
-          continue;
-        } else {
-          const errP = await putPostersRes.text();
-          console.error(`❌ [GITHUB ERROR promo-posters.json]: HTTP ${putPostersRes.status} - ${errP}`);
-          return false;
-        }
-      } catch (err) {
-        console.error('Error updating promo-posters.json:', err.message);
       }
+
+      posters = posters.slice(0, 6);
+
+      const putRes = await fetch(postersUrl, {
+        method: 'PUT',
+        headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `auto: live poster update (${promoList.map(p => p.badge).join(', ')}) from WhatsApp Channel`,
+          content: Buffer.from(JSON.stringify(posters, null, 2)).toString('base64'),
+          sha: sha || undefined
+        })
+      });
+
+      if (putRes.ok) {
+        console.log(`🎉 [GITHUB PUSH] Sukses deploy promo-posters.json ke website!`);
+        break;
+      }
+    } catch (err) {
+      console.error(`Posters commit attempt ${attempt} error:`, err.message);
     }
-  } catch (err) {
-    console.error('Error upload poster:', err.message);
   }
-  return false;
+
+  // B. Update promos.json
+  const promosUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/promos.json`;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      let currentPromos = [];
+      let sha = '';
+      const getRes = await fetch(promosUrl, { headers: ghHeaders() });
+      if (getRes.ok) {
+        const fileData = await getRes.json();
+        sha = fileData.sha || '';
+        currentPromos = JSON.parse(Buffer.from(fileData.content, 'base64').toString('utf-8'));
+      }
+
+      for (let i = promoList.length - 1; i >= 0; i--) {
+        const promo = promoList[i];
+        const newPromoItem = {
+          id: `promo-${timestamp}-${i}`,
+          badge: promo.badge,
+          badgeType: promo.badgeType,
+          airlineLogo: promo.airlineLogo,
+          origin: promo.origin,
+          originCode: promo.originCode,
+          destination: promo.destination,
+          destinationCode: promo.destinationCode,
+          transit: promo.transit,
+          price: promo.price,
+          date: promo.date,
+          baggage: promo.baggage,
+          waText: promo.waText
+        };
+
+        const dupIdx = currentPromos.findIndex(p => p.badge === newPromoItem.badge && p.origin === newPromoItem.origin && p.destination === newPromoItem.destination && p.price === newPromoItem.price);
+        if (dupIdx !== -1) {
+          currentPromos.splice(dupIdx, 1);
+        }
+        currentPromos.unshift(newPromoItem);
+      }
+
+      currentPromos = currentPromos.slice(0, 6);
+
+      const putRes = await fetch(promosUrl, {
+        method: 'PUT',
+        headers: { ...ghHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: `auto: live promos.json update (${promoList.map(p => p.badge).join(', ')}) from WhatsApp Channel`,
+          content: Buffer.from(JSON.stringify(currentPromos, null, 2)).toString('base64'),
+          sha: sha || undefined
+        })
+      });
+
+      if (putRes.ok) {
+        console.log(`🎉 [GITHUB PUSH] Sukses deploy promos.json ke website!`);
+        break;
+      }
+    } catch (err) {
+      console.error(`Promos commit attempt ${attempt} error:`, err.message);
+    }
+  }
+
+  // Also sync locally if website workspace is present
+  try {
+    const localDir = path.join(__dirname, '..');
+    const localPostersFile = path.join(localDir, 'promo-posters.json');
+    const localPromosFile = path.join(localDir, 'promos.json');
+    if (fs.existsSync(localPostersFile)) {
+      let localPosters = JSON.parse(fs.readFileSync(localPostersFile, 'utf-8'));
+      for (const p of promoList) {
+        localPosters.unshift({
+          id: `poster-${timestamp}`,
+          image: fileName,
+          badge: p.badge,
+          badgeType: p.badgeType,
+          title: p.title,
+          desc: p.desc,
+          price: p.price,
+          date: p.date,
+          waText: p.waText,
+          addedAt: new Date().toISOString()
+        });
+      }
+      fs.writeFileSync(localPostersFile, JSON.stringify(localPosters.slice(0, 6), null, 2), 'utf-8');
+    }
+
+    // Sync ke D:\RAKSA TRAVEL V3\promos.json (V3 clean format, tepat 6 item FIFO)
+    const v3PromosPath = 'D:\\RAKSA TRAVEL V3\\promos.json';
+    if (fs.existsSync(v3PromosPath)) {
+      let v3List = [];
+      try { v3List = JSON.parse(fs.readFileSync(v3PromosPath, 'utf-8')); } catch (e) {}
+      if (!Array.isArray(v3List)) v3List = [];
+
+      const mNames = {januari:1,jan:1,februari:2,feb:2,maret:3,mar:3,april:4,apr:4,mei:5,may:5,juni:6,jun:6,juli:7,jul:7,agustus:8,agu:8,aug:8,september:9,sep:9,oktober:10,okt:10,oct:10,november:11,nov:11,desember:12,des:12,dec:12};
+      for (const p of promoList) {
+        const rawPrice = parseInt(String(p.price || 0).replace(/\D/g, ''), 10) || 0;
+        const bagMatch = String(p.baggage || '').match(/\d+/);
+        const rawBaggage = bagMatch ? parseInt(bagMatch[0], 10) : 20;
+        const isDirect = !String(p.transit || '').toLowerCase().includes('transit') ? 1 : 0;
+        const dMatch = String(p.date || '').match(/\b\d{1,2}\b/g);
+        const days = dMatch ? [...new Set(dMatch.map(Number).filter(n => n >= 1 && n <= 31))] : [new Date().getDate()];
+        let month = new Date().getMonth() + 1;
+        const dLower = String(p.date || '').toLowerCase();
+        for (const [k, v] of Object.entries(mNames)) { if (dLower.includes(k)) { month = v; break; } }
+
+        const item = {
+          a: p.badge || 'Lion Air',
+          d: isDirect,
+          f: p.origin || 'Jayapura',
+          t: p.destination || 'Makassar',
+          days: days.length ? days : [new Date().getDate()],
+          m: month,
+          tiers: [{ p: rawPrice, b: rawBaggage }]
+        };
+
+        // Hapus duplikat rute & maskapai lama (deduplikasi)
+        v3List = v3List.filter(x => !(x.a === item.a && x.f === item.f && x.t === item.t && x.m === item.m));
+        // Taruh promo terbaru di paling depan (FIFO)
+        v3List.unshift(item);
+      }
+
+      // Pertahankan tepat 6 promo aktif terbaru (yang terlama otomatis keluar dari queue)
+      v3List = v3List.slice(0, 6);
+      fs.writeFileSync(v3PromosPath, JSON.stringify(v3List, null, 2), 'utf-8');
+      console.log(`✅ [PROMO V3 LOCAL]: Sukses update D:\\RAKSA TRAVEL V3\\promos.json (${v3List.length} items FIFO)`);
+    }
+  } catch (e) {}
+
+  return true;
 }
 
-// 5. Universal Message Parser & Worker
+// 6. Process Inbound WhatsApp Media Message
 async function processMessageMedia(msg, sourceTag = 'EVENT') {
   const msgId = msg.key?.id;
   if (msgId && processedMessageIds.has(msgId)) {
@@ -636,7 +750,7 @@ async function processMessageMedia(msg, sourceTag = 'EVENT') {
   }
 
   const msgObj = msg.message || {};
-  const imgObj = msgObj.imageMessage || 
+  const imgObj = msgObj.imageMessage ||
                  msgObj.viewOnceMessageV2?.message?.imageMessage ||
                  msgObj.viewOnceMessage?.message?.imageMessage ||
                  msgObj.documentWithCaptionMessage?.message?.imageMessage ||
@@ -645,36 +759,53 @@ async function processMessageMedia(msg, sourceTag = 'EVENT') {
                  msgObj.interactiveMessage?.header?.imageMessage ||
                  (msgObj.documentMessage?.mimetype?.startsWith('image/') ? msgObj.documentMessage : null);
 
-  const captionHint = imgObj?.caption || 
-                      msgObj.extendedTextMessage?.text || 
-                      msgObj.conversation || 
+  const captionHint = imgObj?.caption ||
+                      msgObj.extendedTextMessage?.text ||
+                      msgObj.conversation ||
                       '';
 
   if (imgObj) {
-    console.log(`\n📥 [${sourceTag}] Poster Saluran Terdeteksi: ${msg.key?.remoteJid || TARGET_CHANNEL_JID} (ID: ${msgId})`);
+    console.log(`\n📥 [${sourceTag}] Poster Saluran Terdeteksi (ID: ${msgId})`);
     try {
       const rawBuffer = await downloadMediaMessage(msg, 'buffer', {});
       if (rawBuffer && rawBuffer.length > 1000) {
         console.log(`📦 Mengompres poster (Ukuran asli: ${(rawBuffer.length / 1024).toFixed(1)} KB)...`);
         const compressedBuffer = await compressImageBuffer(rawBuffer);
-        console.log(`✨ Hasil kompresi: ${(compressedBuffer.length / 1024).toFixed(1)} KB (hemat ${((1 - compressedBuffer.length / rawBuffer.length) * 100).toFixed(0)}%)`);
+        console.log(`✨ Hasil kompresi: ${(compressedBuffer.length / 1024).toFixed(1)} KB`);
 
         const base64Data = compressedBuffer.toString('base64');
         console.log('🤖 Ekstraksi metadata promo dengan AI Vision / OCR Engine...');
-        const promoData = await analyzeImageWithAiVision(base64Data, captionHint);
+        const promoList = await analyzeImageWithAiVision(base64Data, captionHint);
 
-        if (!promoData || !promoData.badge || !promoData.origin || !promoData.destination || !promoData.price) {
+        if (!promoList || promoList.length === 0) {
           console.log(`⛔ [DIABAIKAN] Gambar ID ${msgId} BUKAN poster promo tiket resmi Raksa Travel. Ditolak.`);
           return null;
         }
 
-        console.log(`✅ [PROMO TERVALIDASI]: ${promoData.badge} | ${promoData.origin} -> ${promoData.destination} | Rp ${promoData.price}`);
-        await commitPromosToGitHub(promoData);
-        await uploadPosterToGitHub(base64Data, promoData, compressedBuffer);
+        console.log(`✅ [PROMO TERVALIDASI]: ${promoList.length} opsi promo ditemukan.`);
+        const timestamp = Date.now();
+        const fileName = `images/promo-${timestamp}.jpeg`;
+
+        // 1. Upload compressed image to GitHub
+        await uploadImageToGitHub(fileName, base64Data, promoList[0]);
+
+        // 2. Commit all promo entries to promo-posters.json and promos.json
+        await syncAllPromosToGitHub(fileName, promoList);
+
+        for (const p of promoList) {
+          logSync(`Deploy Promo: ${p.badge} ${p.origin} -> ${p.destination} (Rp ${p.price})`);
+          tapToN8nPromo({
+            event: 'promo_synced',
+            rute: `${p.origin} -> ${p.destination}`,
+            harga: p.price,
+            maskapai: p.badge
+          });
+        }
+
         if (msgId) {
           saveProcessedMessageId(msgId);
         }
-        return promoData;
+        return promoList;
       }
     } catch (err) {
       console.error(`❌ Gagal mendownload / memproses gambar: ${err.message}`);
@@ -683,7 +814,7 @@ async function processMessageMedia(msg, sourceTag = 'EVENT') {
   return null;
 }
 
-// 6. Polling Watchdog for Newsletter (Guarantees 100% detection)
+// 7. Polling Watchdog for Newsletter (Guarantees 100% detection)
 function startNewsletterWatchdog(sock) {
   if (watchdogInterval) clearInterval(watchdogInterval);
 
@@ -695,7 +826,6 @@ function startNewsletterWatchdog(sock) {
     try {
       const channelMsgs = await sock.newsletterFetchMessages(TARGET_CHANNEL_JID, 25);
       if (channelMsgs && channelMsgs.length > 0) {
-        // Sort newest first to prioritize most recent uploads
         channelMsgs.sort((a, b) => (b.messageTimestamp || 0) - (a.messageTimestamp || 0));
         for (const cMsg of channelMsgs) {
           const msgId = cMsg.key?.id;
@@ -705,18 +835,17 @@ function startNewsletterWatchdog(sock) {
         }
       }
     } catch (err) {
-      // Channel silent catch
+      // Silent catch
     } finally {
       isProcessingQueue = false;
     }
   };
 
-  // Run immediately then every 15 seconds
   fetchChannelUpdates();
   watchdogInterval = setInterval(fetchChannelUpdates, 15000);
 }
 
-// 7. Connect Baileys WhatsApp WebSocket Engine
+// 8. Connect Baileys WhatsApp Engine
 async function startWhatsAppBot() {
   const authDir = path.join(__dirname, 'baileys_auth_info');
   const { state, saveCreds } = await useMultiFileAuthState(authDir);
@@ -765,46 +894,47 @@ async function startWhatsAppBot() {
       if (shouldReconnect) {
         setTimeout(startWhatsAppBot, 5000);
       } else {
-        authStatus = 'Logged Out. Silakan Scan QR Code Baru.';
-        setTimeout(startWhatsAppBot, 5000);
+        console.log('Sesi logout. Menghapus sesi lama...');
+        try {
+          fs.rmSync(authDir, { recursive: true, force: true });
+        } catch (e) {}
+        setTimeout(startWhatsAppBot, 3000);
       }
     } else if (connection === 'open') {
-      authStatus = '✅ ONLINE 24/7 DI CLOUD VPS';
       isConnected = true;
       latestQrDataUrl = '';
       latestQrRaw = '';
-      console.log('\n🎉 [WHATSAPP TERKONEKSI]: Bot aktif memantau saluran 24 jam nonstop!');
+      authStatus = 'Terhubung ke WhatsApp Cloud! 🚀';
+      console.log('✅ [WHATSAPP CLOUD TERHUBUNG!]: Bot aktif memantau saluran 24/7');
+      logSync('🚀 WhatsApp Cloud Terhubung!');
 
-      // Dynamic Newsletter Resolver function
-      const resolveNewsletter = async () => {
-        try {
-          if (typeof sock.newsletterMetadata === 'function') {
-            const channelMeta = await sock.newsletterMetadata('invite', TARGET_CHANNEL_CODE);
-            if (channelMeta && channelMeta.id) {
-              TARGET_CHANNEL_JID = channelMeta.id;
-              console.log(`📢 [CHANNEL DIPANTAU]: ${channelMeta.name || 'Raksa Travel'} (JID: ${TARGET_CHANNEL_JID})`);
-              if (typeof sock.newsletterFollow === 'function') {
-                try { await sock.newsletterFollow(TARGET_CHANNEL_JID); } catch (e) {}
-                console.log(`✅ [AUTO-SUBSCRIBE]: Terhubung ke saluran promo WhatsApp!`);
-              }
-            }
-          }
-        } catch (err) {
-          console.log(`ℹ️ [CHANNEL INFO]: Saluran terdaftar (${TARGET_CHANNEL_CODE})`);
-        }
-      };
-
-      await resolveNewsletter();
-      if (metadataRetryInterval) clearInterval(metadataRetryInterval);
-      metadataRetryInterval = setInterval(resolveNewsletter, 300000); // verify channel metadata every 5 min
-
-      // Start continuous channel watchdog
       startNewsletterWatchdog(sock);
 
-      // Auto-sync 6 latest verified official promos on startup
-      setTimeout(() => {
-        syncLatestChannelPromos(40);
-      }, 5000);
+      if (typeof sock.newsletterMetadata === 'function') {
+        const queryMetadata = async () => {
+          try {
+            const meta = await sock.newsletterMetadata('invite', TARGET_CHANNEL_CODE);
+            if (meta?.id) {
+              TARGET_CHANNEL_JID = meta.id;
+              console.log(`📡 [SALURAN TERDAFTAR]: ${meta.name || 'Raksa Travel'} (JID: ${TARGET_CHANNEL_JID})`);
+              logSync(`Saluran Terdeteksi: ${meta.name || 'Raksa Travel'}`);
+
+              if (typeof sock.newsletterFollow === 'function') {
+                await sock.newsletterFollow(TARGET_CHANNEL_JID).catch(() => {});
+              }
+              if (typeof sock.subscribeNewsletterUpdates === 'function') {
+                await sock.subscribeNewsletterUpdates(TARGET_CHANNEL_JID).catch(() => {});
+                console.log(`📡 [LIVE FEED TERHUBUNG]: Subscribed saluran WhatsApp 100%`);
+                logSync('Live Feed Saluran Aktif!');
+              }
+            }
+          } catch (e) {
+            console.log('Notice: Info metadata saluran ditunda.');
+          }
+        };
+        queryMetadata();
+        metadataRetryInterval = setInterval(queryMetadata, 60000);
+      }
     }
   });
 
@@ -813,22 +943,17 @@ async function startWhatsAppBot() {
       try {
         if (!msg.message) continue;
         const remoteJid = msg.key?.remoteJid || '';
-        const participant = msg.key?.participant || '';
-        const sender = `${remoteJid} ${participant}`;
-        const isFromMe = msg.key?.fromMe === true;
 
-        // AUTHORIZED SENDER / OWNER (RAKSA TRAVEL ADMIN: 082153043601)
-        const isOwner = sender.includes('6282153043601') || sender.includes('082153043601') || 
-                        sender.includes('6282199157389') || sender.includes('082199157389') || 
-                        sender.includes('6283821089552') || isFromMe;
+        // STRICT FILTER: HANYA proses & push promo yang di-upload di Saluran WhatsApp "RAKSA TRAVEL"
+        const isFromTargetChannel = (remoteJid === TARGET_CHANNEL_JID) ||
+                                   (remoteJid === '120363413097453454@newsletter');
 
-        // TARGET: Saluran Resmi WhatsApp RAKSA TRAVEL (0029VbCYmHQ9WtBxoi1pjH0f / @newsletter)
-        const isFromTargetChannel = (remoteJid === TARGET_CHANNEL_JID) || 
-                                   (remoteJid.endsWith('@newsletter'));
-
-        if (isFromTargetChannel || isOwner) {
-          await processMessageMedia(msg, isFromTargetChannel ? 'LIVE-CHANNEL' : 'OWNER-DIRECT');
+        if (!isFromTargetChannel) {
+          // Abaikan semua pesan di luar channel resmi RAKSA TRAVEL (private chat, grup lain, dll)
+          continue;
         }
+
+        await processMessageMedia(msg, 'LIVE-CHANNEL');
       } catch (err) {
         console.log('Error processing incoming message:', err.message);
       }
@@ -836,7 +961,7 @@ async function startWhatsAppBot() {
   });
 }
 
-// 8. Express Web Server for Monitoring, Status & Manual Webhook Sync
+// 9. Express Web Server for Monitoring & Manual Sync
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -847,7 +972,7 @@ app.get('/', (req, res) => {
       <title>Raksa Travel 24/7 Cloud Baileys Bot</title>
       <style>
         body { background: #070d18; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; }
-        .card { background: #0f1a2e; border: 2px solid #25D366; padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(37, 211, 102, 0.2); max-width: 460px; width: 92%; }
+        .card { background: #0f1a2e; border: 2px solid #25D366; padding: 30px; border-radius: 20px; box-shadow: 0 10px 40px rgba(37, 211, 102, 0.2); max-width: 480px; width: 92%; }
         h1 { color: #25D366; margin-top: 0; font-size: 22px; }
         .badge { background: rgba(37, 211, 102, 0.2); color: #25D366; padding: 8px 16px; border-radius: 999px; font-weight: bold; display: inline-block; margin: 15px 0; }
         .qr-box { background: white; padding: 15px; border-radius: 12px; display: inline-block; margin: 15px 0; }
@@ -863,7 +988,7 @@ app.get('/', (req, res) => {
         <div class="badge">${isConnected ? 'ONLINE 24/7 (BAILEYS CLOUD)' : authStatus}</div>
         
         ${latestQrDataUrl && !isConnected ? `
-          <p>Scan QR Code berikut menggunakan aplikasi WhatsApp di HP kamu:</p>
+          <p>Scan QR Code berikut menggunakan WhatsApp Anda:</p>
           <div class="qr-box">
             <img src="${latestQrDataUrl}" alt="WhatsApp QR Code">
           </div>
@@ -887,9 +1012,9 @@ app.get('/', (req, res) => {
           btn.innerText = '⏳ Sedang Memeriksa Saluran...';
           btn.disabled = true;
           try {
-            let res = await fetch('/wa/promo/api/sync', { method: 'POST' }).catch(() => null);
+            let res = await fetch('/api/sync', { method: 'POST' }).catch(() => null);
             if (!res || !res.ok) {
-              res = await fetch('/api/sync', { method: 'POST' });
+              res = await fetch('/wa/promo/api/sync', { method: 'POST' });
             }
             const data = await res.json();
             alert(data.message || 'Sinkronisasi berhasil dijalankan!');
@@ -909,170 +1034,42 @@ app.get('/', (req, res) => {
 
 app.get('/status', (req, res) => {
   res.json({
-    online: isConnected,
+    connected: isConnected,
     status: authStatus,
-    targetChannelCode: TARGET_CHANNEL_CODE,
-    targetChannelJid: TARGET_CHANNEL_JID,
+    targetChannel: TARGET_CHANNEL_JID,
     processedCount: processedMessageIds.size,
-    recentLogs: syncLogHistory.slice(0, 10),
-    hasQr: !!latestQrRaw
+    recentLogs: syncLogHistory.slice(0, 10)
   });
 });
 
-app.get('/qr', (req, res) => {
-  res.json({
-    online: isConnected,
-    status: authStatus,
-    qr: latestQrRaw,
-    qrDataUrl: latestQrDataUrl
-  });
-});
-
-async function syncLatestChannelPromos(limit = 40) {
-  if (!globalSock || !isConnected) {
-    console.log('⚠️ WhatsApp bot belum terkoneksi.');
-    return { ok: false, message: 'WhatsApp bot belum terkoneksi.' };
+app.post(['/api/sync', '/wa/promo/api/sync'], async (req, res) => {
+  if (!isConnected || !globalSock) {
+    return res.status(503).json({ error: 'WhatsApp bot belum terhubung.' });
   }
-  logSync(`Memulai auto-sync 6 promo resmi dari saluran WhatsApp (${TARGET_CHANNEL_JID})...`);
+
   try {
-    const channelMsgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, limit);
-    if (!channelMsgs || channelMsgs.length === 0) {
-      logSync('Tidak ada pesan di saluran.');
-      return { ok: true, count: 0, promos: [] };
-    }
-
-    channelMsgs.sort((a, b) => (b.messageTimestamp || 0) - (a.messageTimestamp || 0));
-
-    let validCount = 0;
-    const foundPromos = [];
-
-    for (const cMsg of channelMsgs) {
-      const msgId = cMsg.key?.id;
-      const msgObj = cMsg.message || {};
-      const imgObj = msgObj.imageMessage || 
-                     msgObj.viewOnceMessageV2?.message?.imageMessage ||
-                     msgObj.viewOnceMessage?.message?.imageMessage ||
-                     msgObj.documentWithCaptionMessage?.message?.imageMessage ||
-                     (msgObj.documentMessage?.mimetype?.startsWith('image/') ? msgObj.documentMessage : null);
-
-      if (!imgObj) continue;
-
-      const captionHint = imgObj?.caption || msgObj.extendedTextMessage?.text || msgObj.conversation || '';
-
-      try {
-        const rawBuffer = await downloadMediaMessage(cMsg, 'buffer', {});
-        if (!rawBuffer || rawBuffer.length < 1000) continue;
-
-        const compressedBuffer = await compressImageBuffer(rawBuffer);
-        const base64Data = compressedBuffer.toString('base64');
-        const promoData = await analyzeImageWithAiVision(base64Data, captionHint);
-
-        if (promoData && promoData.badge && promoData.origin && promoData.destination && promoData.price) {
-          validCount++;
-          console.log(`🎯 [SALURAN RESMI PROMO ${validCount}/6]: ${promoData.badge} ${promoData.origin}->${promoData.destination} Rp ${promoData.price}`);
-          await commitPromosToGitHub(promoData);
-          await uploadPosterToGitHub(base64Data, promoData, compressedBuffer);
-          foundPromos.push({
-            id: msgId,
-            badge: promoData.badge,
-            route: `${promoData.origin} - ${promoData.destination}`,
-            price: promoData.price,
-            date: promoData.date
-          });
-          if (validCount >= 6) {
-            logSync(`✅ Sukses update 6 promo resmi terbaru dari saluran!`);
-            break;
+    if (typeof globalSock.newsletterFetchMessages === 'function') {
+      const channelMsgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, 15);
+      let count = 0;
+      if (channelMsgs && channelMsgs.length > 0) {
+        for (const msg of channelMsgs) {
+          const msgId = msg.key?.id;
+          if (msgId && !processedMessageIds.has(msgId)) {
+            const p = await processMessageMedia(msg, 'MANUAL-TRIGGER');
+            if (p) count++;
           }
-        } else {
-          console.log(`⛔ [NON-PROMO DIABAIKAN] ID: ${msgId}`);
         }
-      } catch (err) {
-        console.error(`Error analyzing msg ${msgId}:`, err.message);
       }
+      return res.json({ success: true, message: `Sinkronisasi selesai. Diproses: ${count} promo baru.` });
     }
-
-    try {
-      fs.writeFileSync('/home/container/latest_6_promos_result.json', JSON.stringify({
-        timestamp: new Date().toISOString(),
-        count: validCount,
-        promos: foundPromos
-      }, null, 2), 'utf-8');
-    } catch (e) {}
-
-    return { ok: true, count: validCount, promos: foundPromos };
   } catch (err) {
-    logSync(`Error sync saluran: ${err.message}`);
-    return { ok: false, error: err.message };
-  }
-}
-
-const handleSyncRequest = async (req, res) => {
-  if (!globalSock || !isConnected) {
-    return res.status(503).json({ success: false, message: 'WhatsApp bot belum terkoneksi ke Cloud.' });
+    return res.status(500).json({ error: err.message });
   }
 
-  try {
-    const result = await syncLatestChannelPromos(40);
-    res.json({ success: result.ok, message: `Sinkronisasi selesai! ${result.count} promo resmi terbaru diproses.`, promos: result.promos });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-};
-
-app.get('/api/debug-channel', async (req, res) => {
-  if (!globalSock || !isConnected) return res.status(503).json({ error: 'offline' });
-  try {
-    let meta = null;
-    try {
-      meta = await globalSock.newsletterMetadata('invite', TARGET_CHANNEL_CODE);
-    } catch (e) {
-      meta = { error: e.message };
-    }
-    
-    let msgs = null;
-    try {
-      msgs = await globalSock.newsletterFetchMessages(TARGET_CHANNEL_JID, 20);
-    } catch (e) {
-      msgs = { error: e.message };
-    }
-
-    let subscribed = null;
-    try {
-      if (typeof globalSock.newsletterSubscribed === 'function') {
-        subscribed = await globalSock.newsletterSubscribed();
-      }
-    } catch (e) {
-      subscribed = { error: e.message };
-    }
-
-    res.json({
-      targetCode: TARGET_CHANNEL_CODE,
-      targetJid: TARGET_CHANNEL_JID,
-      meta,
-      subscribed,
-      msgsCount: Array.isArray(msgs) ? msgs.length : msgs
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ success: true, message: 'Pemeriksaan selesai.' });
 });
 
-app.post('/api/sync', handleSyncRequest);
-app.post('/wa/promo/api/sync', handleSyncRequest);
-app.get('/api/sync-6', handleSyncRequest);
-app.post('/api/sync-6', handleSyncRequest);
-
-app.post('/api/restart', (req, res) => {
-  res.json({ ok: true, message: 'Restarting bot in 1s...' });
-  setTimeout(() => process.exit(0), 1000);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🌐 [WEB DASHBOARD] Aktif pada port ${PORT}`);
+  startWhatsAppBot();
 });
-app.post('/wa/promo/api/restart', (req, res) => {
-  res.json({ ok: true, message: 'Restarting bot in 1s...' });
-  setTimeout(() => process.exit(0), 1000);
-});
-
-app.listen(PORT, () => {
-  console.log(`🌐 Web monitoring active on port ${PORT}`);
-});
-
-startWhatsAppBot();

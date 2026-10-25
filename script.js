@@ -1,948 +1,183 @@
-/* ===================================================
-   RaksaTravel — Main Script
-   Bilingual System (ID/EN) + Dark/Light Theme + Interactions
-   =================================================== */
+const $=(s,e=document)=>e.querySelector(s),$$=(s,e=document)=>[...e.querySelectorAll(s)];
+const ls=(k,v)=>{try{return v===undefined?localStorage.getItem(k):localStorage.setItem(k,v)}catch(e){}};
+let L=ls('raksa-lang')==='en'?'en':'id',TH=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
+const WA='6282153043601';
+const RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const C={CGK:{id:'Jakarta',en:'Jakarta'},DPS:{id:'Bali (Denpasar)',en:'Bali (Denpasar)'},SUB:{id:'Surabaya',en:'Surabaya'},UPG:{id:'Makassar',en:'Makassar'},BPN:{id:'Balikpapan',en:'Balikpapan'},YIA:{id:'Yogyakarta',en:'Yogyakarta'},KNO:{id:'Medan',en:'Medan'},LBJ:{id:'Labuan Bajo',en:'Labuan Bajo'},JKT:{id:'Tanjung Priok, Jakarta',en:'Tanjung Priok, Jakarta'},AMQ:{id:'Ambon',en:'Ambon'}};
+const AIR=['CGK','DPS','SUB','UPG','BPN','YIA','KNO','LBJ'],SEA=['JKT','SUB','UPG','BPN','AMQ'];
+const T={
+home:['Beranda','Home'],cek:['Cek Tiket','Check Tickets'],svc:['Layanan','Services'],about:['Tentang','About'],faq:['FAQ','FAQ'],testi:['Testimoni','Reviews'],contact:['Kontak','Contact'],book:['Pesan Tiket','Book Now'],
+skip:['Lewati ke konten','Skip to content'],thL:['Ganti ke mode terang','Switch to light mode'],thD:['Ganti ke mode gelap','Switch to dark mode'],
+eyebrow:['✦ Agen Travel Resmi · Sejak 2016','✦ Official Travel Agency · Since 2016'],
+h1:['Terbang lebih tenang, berlayar lebih nyaman.','Fly calmer. Sail smoother.'],
+sub:['Pesan tiket pesawat & kapal PELNI dengan harga transparan, dibantu manusia asli, bukan bot.','Book flights and PELNI ferries at transparent prices, with real humans, not bots.'],
+tabF:['Pesawat','Flights'],tabP:['Kapal PELNI','PELNI Ferries'],from:['Dari','From'],to:['Ke','To'],date:['Tanggal Berangkat','Departure'],pax:['Penumpang','Passengers'],search:['Cari Tiket','Search Tickets'],swap:['Tukar asal dan tujuan','Swap origin and destination'],
+trust:['Dipercaya 1.500+ penumpang sejak 2016','Trusted by 1,500+ travelers since 2016'],
+dH:['Ke mana tahun ini?','Where to next?'],dSub:['Berikut adalah 4 Tempat yang sering di pesan oleh pelanggan','Here are 4 popular destinations frequently booked by our customers'],
+dest:['Bandara Sentani|JAYAPURA|Pintu gerbang utama keindahan Danau Sentani dan pesona tanah Papua.|dest-jayapura.webp;;Masjid 1000 Quba|MAKASSAR / SULAWESI SELATAN|Ikon megah tepi Pantai Losari dengan puluhan kubah artistik.|dest-makassar.webp;;Patung Sura & Boyo|SURABAYA|Monumen legendaris hiu dan buaya lambang keberanian Kota Pahlawan.|dest-surabaya.webp;;Monas|JAKARTA|Ikon Monumen Nasional dengan lidah api emas di jantung ibu kota.|dest-jakarta.webp','Sentani Airport|JAYAPURA|Main air gateway to Lake Sentani and the beauty of Papua.|dest-jayapura.webp;;1000 Quba Mosque|MAKASSAR / SOUTH SULAWESI|Grand 99-dome architectural icon along scenic Losari Beach.|dest-makassar.webp;;Sura & Boyo Statue|SURABAYA|Legendary shark and crocodile monument of the heroic city.|dest-surabaya.webp;;Monas|JAKARTA|National Monument featuring the flame of independence in Jakarta.|dest-jakarta.webp'],
+sH:['Satu agen, dua samudra.','One agency, two oceans.'],
+svcs:['✈|Tiket Pesawat|Semua maskapai, satu pintu.;;⚓|Tiket Kapal PELNI|Rute Nusantara, ekonomi sampai VIP.','✈|Flights|Every airline, one door.;;⚓|PELNI Ferries|Archipelago routes, economy to first class.'],
+seeSvc:['Lihat Layanan →','See Services →'],
+wH:['Kenapa RAKSA TRAVEL','Why RAKSA TRAVEL'],
+why:['Harga Transparan|Nggak ada biaya kejutan di akhir.;;CS Manusia Asli 24/7|Chat langsung ke tim, bukan bot.;;Reschedule Dibantu|Berubah rencana? Kami urus.;;Pembayaran Aman|VA, QRIS, cicilan 0%.','Clear Pricing|No surprise fees.;;Real People, 24/7|Talk to real people, not bots.;;Reschedule Help|Plans changed? We handle it.;;Safe Payments|VA, QRIS, 0% installments.'],
+stH:['Cara pesan','How to book'],
+steps:['Pilih rute & tanggal|Cari lewat widget, bandingkan harga.;;Konfirmasi via WhatsApp|Tim kami cek dan kirim detail.;;Terbang atau berlayar|Bayar, terima e-tiket, berangkat.','Choose route & date|Search, compare prices.;;Confirm on WhatsApp|We verify and send the details.;;Fly or sail|Pay, get your e-ticket, go.'],
+tH:['Kata mereka yang sudah berangkat.','Words from those who’ve traveled.'],tAll:['Baca semua testimoni →','Read all reviews →'],
+fH:['Pertanyaan populer','Popular questions'],fAll:['Lihat semua FAQ →','See all FAQs →'],
+ctaH:['Siap berangkat?','Ready to go?'],ctaS:['Chat kami sekarang, tim balas dalam 2 menit.','Message us now. We reply in 2 minutes.'],ctaW:['Chat WhatsApp','Chat on WhatsApp'],
+ckH:['Cek Tiket & Promo','Tickets & Promos'],
+qH:['Tanya tiket pesawat / kapal','Ask about flight / ferry tickets'],qS:['Isi data perjalanan, tim kami kirim jadwal dan harga terbaru lewat WhatsApp.','Fill in your trip and we’ll send the latest schedule and prices on WhatsApp.'],qMode:['Jenis Tiket','Ticket Type'],qOpt:['Tiket Pesawat|Tiket Kapal PELNI','Flight Ticket|PELNI Ferry Ticket'],qFrom:['Kota Keberangkatan','Departure City'],qTo:['Kota Tujuan','Destination City'],qDate:['Tanggal Rencana Berangkat','Planned Date'],qPax:['Jumlah Penumpang','Passengers'],qGo:['Cari Jadwal via WhatsApp','Find Schedule on WhatsApp'],qPhF:['Contoh: Jayapura','e.g. Jayapura'],qPhT:['Contoh: Surabaya','e.g. Surabaya'],qErr:['Isi kota asal dan tujuan dulu.','Please enter origin and destination.'],
+mock:['Promo diperbarui rutin. Harga bisa berubah, konfirmasi lewat WhatsApp.','Promos updated regularly. Prices may change; confirm on WhatsApp.'],
+dirB:['LANGSUNG|TRANSIT','DIRECT|LAYOVER'],pDate:['Tanggal promo','Promo dates'],bag:['Bagasi','Baggage'],orderWa:['Pesan via WhatsApp','Book on WhatsApp'],pFilt:['Semua|Langsung|Transit','All|Direct|Layover'],qPh:['Cari kota atau maskapai…','Search city or airline…'],pH:['Promo tiket terbaru','Latest ticket promos'],pAllB:['Lihat semua promo →','See all promos →'],hC1:['Lihat Promo Tiket','View Ticket Promos'],
 
-// ================= Clean URL Engine =================
-// Strips trailing .html from browser address bar smoothly without reloading
-(function() {
-  try {
-    const path = window.location.pathname;
-    if (path.endsWith('.html')) {
-      let clean = path.replace(/\/index\.html$/, '/').replace(/\.html$/, '');
-      if (!clean) clean = '/';
-      window.history.replaceState(null, '', clean + window.location.search + window.location.hash);
-    }
-  } catch (e) {}
-})();
-
-/* ===== COMPLETE TRANSLATION DICTIONARY ===== */
-const T = {
-  // Navigation
-  nav_home: { id: 'Beranda', en: 'Home' },
-  nav_tickets: { id: 'Cek Tiket', en: 'Check Tickets' },
-  nav_about: { id: 'Tentang', en: 'About' },
-  nav_services: { id: 'Layanan', en: 'Services' },
-  nav_faq: { id: 'FAQ', en: 'FAQ' },
-  nav_testimonials: { id: 'Testimoni', en: 'Testimonials' },
-  nav_contact: { id: 'Kontak', en: 'Contact' },
-  nav_book_now: { id: 'Pesan Sekarang', en: 'Book Now' },
-
-  // Footer
-  footer_desc: {
-    id: 'Agen tiket pesawat dan kapal laut di Jayapura, Papua. Melayani pembelian tiket, info jadwal keberangkatan, dan konsultasi rute perjalanan antar pulau.',
-    en: 'Flight and passenger ship ticketing agent based in Jayapura, Papua. Providing booking services, live schedule updates, and inter-island travel support.'
-  },
-  footer_quick_links: { id: 'Menu Cepat', en: 'Quick Links' },
-  footer_support: { id: 'Bantuan', en: 'Help & Support' },
-  footer_contact_title: { id: 'Kontak Admin', en: 'Contact Info' },
-  footer_help_center: { id: 'Chat WhatsApp Kami', en: 'WhatsApp Help Desk' },
-  footer_rights: { id: '© 2026 RaksaTravel. Hak cipta dilindungi undang-undang.', en: '© 2026 RaksaTravel. All rights reserved.' },
-  footer_built_with: { id: 'Website by Raihan ', en: 'Website by Raihan ' },
-
-  // ================= HOME (index.html) =================
-  hero_badge_text: {
-    id: 'Tiket Maskapai & Pelni • Konfirmasi Cepat',
-    en: 'Airlines & PELNI Tickets • Fast Confirmation'
-  },
-  popular_routes_label: { id: 'Rute Populer:', en: 'Top Routes:' },
-  home_hero_title: {
-    id: 'Mau Bepergian Naik Pesawat atau Kapal? Kami Bantu Urus Tiketnya.',
-    en: 'Traveling by Flight or Ship? Let Us Handle Your Tickets.'
-  },
-  home_hero_desc: {
-    id: 'Tinggal kirim rute dan tanggal keberangkatan ke WhatsApp. Kami carikan jadwal yang cocok dan langsung terbitkan tiket resminya tanpa ribet.',
-    en: 'Simply send your route and travel dates to WhatsApp. We will find matching schedules and issue official tickets quickly without hassle.'
-  },
-  home_hero_cta_wa: { id: 'Pesan Tiket via WhatsApp', en: 'Book via WhatsApp' },
-  home_hero_cta_services: { id: 'Lihat Pilihan Layanan', en: 'View Travel Services' },
-  home_stat_customers: { id: 'Tiket Diterbitkan', en: 'Tickets Issued' },
-  home_stat_routes: { id: 'Rute Pesawat & Laut', en: 'Air & Sea Routes' },
-  home_stat_experience: { id: 'Tahun di Jayapura', en: 'Years in Jayapura' },
-  hero_logo_tag: { id: 'Pemesanan Tiket Pesawat & Kapal Pelni', en: 'Flight & PELNI Ticket Booking' },
-
-  home_dest_label: { id: 'Tujuan Favorit', en: 'Top Destinations' },
-  home_dest_title: { id: 'Rute yang Sering Dipesan Minggu Ini', en: 'Frequently Booked Routes' },
-  home_dest_desc: {
-    id: 'Beberapa kota tujuan penerbangan dan kapal yang paling ramai dipesan pelanggan kami:',
-    en: 'Popular destinations most frequently booked by our travelers this week:'
-  },
-  home_dest_bali: { id: 'Denpasar (Bali)', en: 'Denpasar (Bali)' },
-  home_dest_bali_desc: { id: 'Penerbangan liburan dan wisata santai ke Pulau Dewata.', en: 'Leisure and holiday flights connecting directly to Bali.' },
-  home_dest_jakarta: { id: 'Jakarta (CGK/HLP)', en: 'Jakarta (CGK/HLP)' },
-  home_dest_jakarta_desc: { id: 'Penerbangan bisnis dan urusan dinas kantor ke Ibukota.', en: 'Business and official trips to the capital city hubs.' },
-  home_dest_surabaya: { id: 'Surabaya (SUB)', en: 'Surabaya (SUB)' },
-  home_dest_surabaya_desc: { id: 'Pintu masuk Jawa Timur dan transit kapal Tanjung Perak.', en: 'East Java gateway and Tanjung Perak maritime seaport route.' },
-  home_dest_action: { id: 'Tanya Jadwal', en: 'Ask Schedule' },
-  home_price_from: { id: 'Mulai', en: 'From' },
-
-  home_why_label: { id: 'Kemudahan Layanan', en: 'Service Benefits' },
-  home_why_title: { id: 'Alasan Penumpang Nyaman Pesan di Raksa Travel', en: 'Why Travelers Book With Raksa Travel' },
-  home_why_desc: {
-    id: 'Kami pastikan proses pembelian tiket Anda jelas, aman, dan langsung direspons staf kami:',
-    en: 'We ensure your booking process is clear, transparent, and assisted directly by staff:'
-  },
-  home_why_card1_title: { id: 'Tiket Resmi Berkode PNR', en: 'Official PNR Booking Code' },
-  home_why_card1_desc: { id: 'Setiap tiket pesawat dan kapal langsung terdaftar di sistem maskapai atau Pelni. Anda bisa cek langsung di situs resmi maskapai.', en: 'Every ticket is registered in the airline or PELNI database with official PNR for direct validation.' },
-  home_why_card2_title: { id: 'Rincian Biaya Terbuka', en: 'Transparent Upfront Pricing' },
-  home_why_card2_desc: { id: 'Harga yang kami sampaikan di awal sudah termasuk pajak bandara dan bagasi. Tidak ada biaya tambahan yang disembunyikan.', en: 'Quoted prices include airport taxes and standard baggage with zero hidden charges.' },
-  home_why_card3_title: { id: 'Dibantu Staf Berpengalaman', en: 'Assisted by Real Staff' },
-  home_why_card3_desc: { id: 'Kalau butuh ubah tanggal keberangkatan, salah ketik nama, atau tambah bagasi, staf kami siap bantu sampai selesai.', en: 'Need reschedule, name fixes, or extra baggage? Our staff guides you until completed.' },
-
-  home_stat_travelers: { id: 'Penumpang', en: 'Travelers' },
-  home_stat_total_routes: { id: 'Pilihan Rute', en: 'Route Options' },
-  home_stat_partners: { id: 'Maskapai & Kapal', en: 'Carriers & Lines' },
-  home_stat_satisfaction: { id: 'Kepuasan Penumpang', en: 'Satisfaction Rate' },
-
-  home_cta_title: { id: 'Sudah Tahu Mau Berangkat Kapan?', en: 'Ready to Plan Your Trip?' },
-  home_cta_desc: {
-    id: 'Ketik kota asal, tujuan, dan perkiraan tanggal berangkat ke WhatsApp kami. Staf kami akan langsung infokan jam dan harga tiketnya.',
-    en: 'Send your departure city, destination, and dates to our WhatsApp. Our team will check schedules and prices immediately.'
-  },
-  home_cta_btn_wa: { id: 'Chat Admin di WhatsApp', en: 'Chat with Admin on WhatsApp' },
-  home_cta_btn_routes: { id: 'Cek Pilihan Tiket', en: 'Check Available Routes' },
-
-  // ================= CEK TIKET (cek-tiket.html) =================
-  check_hero_title: { id: 'Cek Jadwal & Harga Tiket Perjalanan', en: 'Check Travel Schedules & Fares' },
-  check_hero_desc: {
-    id: 'Pilih jenis tiket pesawat atau kapal laut, isi kota asal dan tujuan, lalu klik cari. Tim kami segera kirimkan daftar jam keberangkatan dan harga terbarunya.',
-    en: 'Pick flights or sea ferries, fill in your origin and destination, and submit. Our staff will send available departure times and current fares via WhatsApp.'
-  },
-  check_breadcrumb: { id: 'Cek Tiket', en: 'Check Tickets' },
-
-  check_form_type: { id: 'Jenis Moda Transportasi', en: 'Transport Mode' },
-  check_form_type_plane: { id: 'Tiket Pesawat (Domestik / Internasional)', en: 'Flight Ticket (Domestic / International)' },
-  check_form_type_ship: { id: 'Tiket Kapal Laut / Feri (PELNI / ASDP)', en: 'Ship / Ferry Ticket (PELNI / ASDP)' },
-  check_form_from: { id: 'Kota Keberangkatan', en: 'Departure City' },
-  check_form_from_ph: { id: 'Contoh: Jayapura (DJJ)', en: 'e.g. Jayapura (DJJ)' },
-  check_form_to: { id: 'Kota Tujuan', en: 'Destination City' },
-  check_form_to_ph: { id: 'Contoh: Surabaya (SUB)', en: 'e.g. Surabaya (SUB)' },
-  check_form_date: { id: 'Tanggal Rencana Berangkat', en: 'Travel Date' },
-  check_form_pax: { id: 'Jumlah Penumpang', en: 'Passenger Count' },
-  check_form_submit: { id: 'Cari Jadwal via WhatsApp', en: 'Check Schedule on WhatsApp' },
-
-  // Image 3 texts
-  check_showcase_label: { id: 'RUTE PILIHAN', en: 'FEATURED ROUTES' },
-  check_showcase_title: {
-    id: 'Rute yang Paling Sering Dipesan Minggu Ini',
-    en: 'Our Most Frequently Booked Routes This Week'
-  },
-  check_showcase_desc: {
-    id: 'Pilih salah satu kota di bawah untuk langsung menanyakan ketersediaan kursi dan harga tiket ke admin kami.',
-    en: 'Select any destination below to immediately check seat availability and fares with our team.'
-  },
-  check_reg_jatim: { id: 'JAWA TIMUR', en: 'EAST JAVA' },
-  check_dest_sby: { id: 'Surabaya', en: 'Surabaya' },
-  check_reg_dki: { id: 'DKI JAKARTA', en: 'DKI JAKARTA' },
-  check_dest_jkt: { id: 'Jakarta', en: 'Jakarta' },
-  check_reg_sulsel: { id: 'SULAWESI SELATAN', en: 'SOUTH SULAWESI' },
-  check_dest_mks: { id: 'Makassar', en: 'Makassar' },
-  check_reg_papua: { id: 'PAPUA', en: 'PAPUA' },
-  check_dest_jayapura: { id: 'Jayapura', en: 'Jayapura' },
-  check_card_action: { id: 'Tanya Jadwal & Harga Tiket →', en: 'Ask Schedule & Price →' },
-
-  check_steps_label: { id: 'Cara Pesan', en: 'How It Works' },
-  check_steps_title: { id: '4 Langkah Cepat Beli Tiket di RaksaTravel', en: '4 Simple Steps to Get Your Ticket' },
-  check_step1_title: { id: '1. Kirim Rute & Tanggal', en: '1. Send Route & Date' },
-  check_step1_desc: { id: 'Beri tahu kami kota asal, tujuan, dan perkiraan tanggal berangkat Anda lewat chat WhatsApp.', en: 'Message us your departure, destination, and preferred travel date on WhatsApp.' },
-  check_step2_title: { id: '2. Pilih Jam & Tarif', en: '2. Pick Flight & Fare' },
-  check_step2_desc: { id: 'Admin kami kirimkan pilihan jadwal penerbangan atau kapal laut beserta harga termurah yang tersedia.', en: 'We send available departure times and the lowest prices directly for you to choose.' },
-  check_step3_title: { id: '3. Pembayaran Aman', en: '3. Secure Payment' },
-  check_step3_desc: { id: 'Transfer via rekening resmi bank kami atau scan QRIS. Konfirmasi pembayaran diverifikasi dalam hitungan menit.', en: 'Transfer via our official bank account or QRIS. Payment is verified within minutes.' },
-  check_step4_title: { id: '4. E-Ticket Langsung Dikirim', en: '4. Receive E-Ticket' },
-  check_step4_desc: { id: 'File PDF tiket resmi dikirim ke WhatsApp Anda, lengkap dengan kode PNR untuk langsung check-in.', en: 'Your official e-ticket PDF is sent straight to WhatsApp, ready for easy airport/port check-in.' },
-
-  check_cta_title: { id: 'Butuh Tiket Rombongan Kantor atau Keluarga Besar?', en: 'Planning a Group Booking for Office or Family?' },
-  check_cta_desc: { id: 'Kami siap bantu carikan kuota kursi rombongan dengan pengaturan bagasi dan tarif spesial yang lebih hemat.', en: 'We help organize group seat quotas, manage baggage logistics, and secure special package rates.' },
-  check_cta_btn_wa: { id: 'Konsultasi Tiket Rombongan', en: 'Inquire Group Booking' },
-  check_cta_btn_contact: { id: 'Lihat Info Kontak', en: 'View Contact Info' },
-
-  // ================= TENTANG (tentang.html) =================
-  about_hero_title: { id: 'Tentang RaksaTravel', en: 'About RaksaTravel' },
-  about_hero_desc: { id: 'Mengenal biro tiket perjalanan resmi di Jayapura yang berkomitmen memberikan layanan tiket transparan, jujur, dan mudah diakses siapa saja.', en: 'Learn about our authorized travel ticketing agency in Jayapura, committed to transparent and dependable travel services.' },
-  about_breadcrumb: { id: 'Tentang Kami', en: 'About Us' },
-
-  about_story_label: { id: 'Perjalanan Kami', en: 'Our Story' },
-  about_story_title: { id: 'Bermula dari Niat Membantu Penumpang Dapat Tiket Resmi', en: 'Started from a Mission to Make Ticketing Honest' },
-  about_story_p1: {
-    id: 'RaksaTravel pertama kali membuka layanan di Jayapura pada tahun 2016. Saat itu, banyak calon penumpang kapal PELNI dan pesawat mengeluhkan susahnya mencari tiket resmi tanpa tergiur calo atau harga yang melambung tak wajar.',
-    en: 'RaksaTravel first opened its doors in Jayapura in 2016. Back then, many travelers struggled to secure official ship and flight tickets without risking unauthorized scalpers or arbitrary markups.'
-  },
-  about_story_p2: {
-    id: 'Dari sana kami hadir dengan prinsip sederhana: melayani setiap pesanan secara terbuka, menerbitkan tiket resmi bergaransi, dan merespons setiap pertanyaan pelanggan dengan cepat lewat chat WhatsApp. Sampai sekarang, lebih dari 1.500 penumpang telah mempercayakan perjalanannya kepada kami.',
-    en: 'We built our service on a simple premise: transparent pricing, verified official tickets, and swift, personal customer service on WhatsApp. Today, over 1,500 travelers rely on us for their journeys.'
-  },
-  about_story_btn: { id: 'Hubungi Tim Kami', en: 'Talk with Our Team' },
-
-  about_vm_label: { id: 'Komitmen Kami', en: 'Our Commitment' },
-  about_vm_title: { id: 'Visi & Misi Layanan', en: 'Vision & Mission' },
-  about_vision_title: { id: 'Visi', en: 'Vision' },
-  about_vision_desc: { id: 'Menjadi biro layanan tiket perjalanan paling dapat diandalkan dan paling nyaman diajak konsultasi di Papua dan seluruh Indonesia.', en: 'To be the most dependable, friendly, and accessible travel ticket partner across Papua and Indonesia.' },
-  about_mission_title: { id: 'Misi', en: 'Mission' },
-  about_mission_desc: { id: 'Menyediakan akses tiket resmi maskapai dan kapal laut dengan tarif transparan, proses cepat, serta pendampingan ramah dari awal tanya hingga penumpang tiba di tujuan.', en: 'Providing genuine airline and ferry tickets with honest fares, quick turnaround, and attentive customer care every step of the journey.' },
-
-  about_values_label: { id: 'Prinsip Kerja', en: 'Our Values' },
-  about_values_title: { id: '3 Nilai yang Selalu Kami Pegang', en: '3 Values We Stand By' },
-  about_val1_title: { id: 'Kejujuran Tarif', en: 'Honest Pricing' },
-  about_val1_desc: { id: 'Tidak ada biaya tersembunyi. Rincian harga tiket, pajak, dan bagasi kami jelaskan gamblang sebelum Anda transfer.', en: 'Zero unexpected charges. Full fare breakdowns, taxes, and baggage allowances are stated clearly upfront.' },
-  about_val2_title: { id: 'Respon Cepat', en: 'Prompt Response' },
-  about_val2_desc: { id: 'Kami tahu Anda butuh kepastian jadwal secepatnya. Admin kami selalu siap membalas chat Anda dalam hitungan menit.', en: 'We know travel plans require quick certainty. Our ticketing team responds promptly within minutes.' },
-  about_val3_title: { id: 'Tanggung Jawab Penuh', en: 'Full Accountability' },
-  about_val3_desc: { id: 'Ada kendala reschedule, pembatalan penerbangan dari maskapai, atau ganti nama? Kami kawal prosesnya sampai tuntas.', en: 'Facing schedule changes, carrier cancellations, or name updates? We guide you through until fully resolved.' },
-
-  about_team_label: { id: 'Tim Kami', en: 'Our People' },
-  about_team_title: { id: 'Staf Berpengalaman di Balik RaksaTravel', en: 'The Dedicated Team Behind RaksaTravel' },
-  about_team_member1_role: { id: 'Founder & Pengelola Operasional', en: 'Founder & Operations Lead' },
-  about_team_member1_desc: { id: 'Berpengalaman lebih dari 10 tahun menangani reservasi tiket penerbangan dan pelayaran di Indonesia Timur.', en: 'Over 10 years of hands-on experience managing flight and sea travel reservations across Eastern Indonesia.' },
-  about_team_member2_role: { id: 'Manajer Reservasi Maskapai', en: 'Flight Reservation Specialist' },
-  about_team_member2_desc: { id: 'Mengawal integrasi sistem tiket maskapai agar penerbitan kode PNR berjalan instan dan akurat.', en: 'Oversees airline ticketing channels ensuring immediate, accurate PNR issuance for all airlines.' },
-  about_team_member3_role: { id: 'Koordinator Tiket Kapal & Feri', en: 'Maritime Routes Coordinator' },
-  about_team_member3_desc: { id: 'Spesialis jadwal kapal PELNI, pemesanan kabin kelas, dan tiket penyeberangan feri kendaraan.', en: 'Specialist in PELNI passenger ship schedules, cabin reservations, and vehicle ferry crossings.' },
-  about_team_member4_role: { id: 'Customer Care WhatsApp', en: 'WhatsApp Customer Support' },
-  about_team_member4_desc: { id: 'Siap membantu konsultasi rute, cek ketersediaan kursi, dan bantuan reschedule setiap hari.', en: 'Dedicated to helping with route inquiries, seat checks, and rescheduling assistance daily.' },
-
-  // ================= LAYANAN (layanan.html) =================
-  services_hero_title: { id: 'Layanan Pemesanan Tiket Resmi', en: 'Official Ticketing & Travel Services' },
-  services_hero_desc: { id: 'Dari tiket pesawat seluruh maskapai, kapal penumpang PELNI, feri penyeberangan, hingga pengaturan tiket rombongan keluarga dan dinas.', en: 'From major domestic & international airlines to PELNI ships, vehicle ferries, and group corporate bookings.' },
-  services_breadcrumb: { id: 'Layanan Kami', en: 'Our Services' },
-
-  services_main_label: { id: 'Layanan Utama', en: 'Core Services' },
-  services_main_title: { id: 'Pilihan Transportasi yang Kami Layani', en: 'Transport Modes We Cover' },
-  services_main_desc: { id: 'Melayani rute penerbangan dan pelayaran domestik ke seluruh Nusantara serta penerbangan internasional pilihan.', en: 'Covering domestic routes nationwide across Indonesia as well as selected international flights.' },
-
-  services_flight_tag: { id: 'PESAWAT TERBANG', en: 'AIRLINE FLIGHTS' },
-  services_flight_title: { id: 'Tiket Pesawat Domestik & Internasional', en: 'Domestic & International Flight Tickets' },
-  services_flight_desc: {
-    id: 'Pemesanan tiket resmi untuk semua maskapai nasional seperti Garuda Indonesia, Citilink, Batik Air, Lion Air, Super Air Jet, Sriwijaya Air, dan Wings Air. Tersedia rute langsung maupun transit dengan pilihan bagasi sesuai kebutuhan Anda.',
-    en: 'Official reservations for Garuda Indonesia, Citilink, Batik Air, Lion Air, Super Air Jet, Sriwijaya Air, and Wings Air. Direct and transit options with flexible baggage selections.'
-  },
-  services_flight_btn: { id: 'Pesan Tiket Pesawat', en: 'Book Flight Ticket' },
-
-  services_ship_tag: { id: 'KAPAL LAUT & FERI', en: 'PASSENGER SHIPS & FERRIES' },
-  services_ship_title: { id: 'Tiket Kapal PELNI & Feri Penyeberangan', en: 'PELNI Vessels & Ferry Crossings' },
-  services_ship_desc: {
-    id: 'Layanan tiket resmi kapal penumpang PELNI (seperti KM Dobonsolo, KM Labobar, KM Sinabung, dll) dan penyeberangan feri ASDP. Pilihan kelas ekonomi, kabin wisata ber-AC, serta tiket untuk membawa motor atau mobil pribadi.',
-    en: 'Official ticketing for PELNI passenger vessels (KM Dobonsolo, KM Labobar, KM Sinabung, etc.) and ASDP ferry crossings. Economy berths, AC tourist cabins, and vehicle boarding passes.'
-  },
-  services_ship_btn: { id: 'Pesan Tiket Kapal Laut', en: 'Book Ship Ticket' },
-
-  services_extra_label: { id: 'Bantuan Ekstra', en: 'Additional Assistance' },
-  services_extra_title: { id: 'Layanan Pendukung Perjalanan Anda', en: 'Travel Support Services' },
-  services_extra1_title: { id: 'Asuransi Perjalanan Tambahan', en: 'Travel Protection' },
-  services_extra1_desc: { id: 'Bagi Anda yang menginginkan proteksi lebih selama di perjalanan untuk kenyamanan ekstra bersama keluarga.', en: 'Comprehensive travel coverage for complete peace of mind during your journeys.' },
-  services_extra2_title: { id: 'Bantuan Reschedule & Ganti Jadwal', en: 'Reschedule & Date Modifications' },
-  services_extra2_desc: { id: 'Rencana kerja atau liburan mendadak bergeser? Kami bantu proses pengajuan perubahan tanggal tiket ke pihak maskapai.', en: 'Travel plans shifted? We handle the date change and rebooking process with the transport operator.' },
-  services_extra3_title: { id: 'Tiket Rombongan & Carter Perjalanan', en: 'Group & Corporate Travel' },
-  services_extra3_desc: { id: 'Pengaturan tiket untuk dinas instansi, studi tour sekolah, atau rombongan keluarga besar dengan koordinasi satu pintu.', en: 'Seamless group booking arrangements for corporate trips, school tours, or large family gatherings.' },
-  services_ask_btn: { id: 'Tanya via WhatsApp', en: 'Ask on WhatsApp' },
-
-  // ================= FAQ (faq.html) =================
-  faq_hero_title: { id: 'Pertanyaan yang Sering Diajukan', en: 'Frequently Asked Questions' },
-  faq_hero_desc: { id: 'Jawaban langsung seputar cara pemesanan, verifikasi tiket resmi, metode transfer, dan bantuan jadwal ulang.', en: 'Direct answers regarding ticket reservations, official PNR verification, payment methods, and rescheduling.' },
-  faq_breadcrumb: { id: 'Tanya Jawab (FAQ)', en: 'FAQ' },
-
-  faq_sec1_label: { id: 'Pemesanan', en: 'Booking Inquiries' },
-  faq_sec1_title: { id: 'Cara Pesan & Verifikasi Tiket', en: 'Booking & Ticket Verification' },
-  faq_q1: { id: 'Bagaimana cara pesan tiket di RaksaTravel?', en: 'How do I book a ticket through RaksaTravel?' },
-  faq_a1: {
-    id: 'Cukup kirim pesan ke WhatsApp kami di 0821-5304-3601. Sebutkan rute asal, kota tujuan, tanggal rencana jalan, dan jumlah orang. Tim kami langsung cekkan ketersediaan kursi dan pilihan harga termurah untuk Anda.',
-    en: 'Just message our WhatsApp at 0821-5304-3601 with your departure city, destination, preferred date, and number of passengers. We will look up live seats and send the best options right away.'
-  },
-  faq_q2: { id: 'Apakah tiketnya pasti resmi dan bisa dipakai check-in?', en: 'Are the tickets guaranteed official for airport check-in?' },
-  faq_a2: {
-    id: 'Pasti 100% resmi. Untuk tiket pesawat, Anda akan menerima Kode Booking (PNR) yang bisa dicek langsung di situs resmi maskapai bersangkutan. Untuk tiket kapal laut, kami sertakan barcode resmi untuk cetak boarding pass di pelabuhan.',
-    en: '100% genuine. For flights, you receive a valid Booking Code (PNR) verifiable directly on the airline’s website. Ship tickets include official barcoded vouchers for port boarding pass issuance.'
-  },
-  faq_q3: { id: 'Berapa lama e-ticket dikirim setelah saya transfer?', en: 'How fast will I receive my e-ticket after payment?' },
-  faq_a3: {
-    id: 'Begitu transfer kami terima, e-ticket resmi biasanya langsung terbit dan dikirimkan ke WhatsApp Anda dalam waktu 5 sampai 15 menit.',
-    en: 'Once payment is received, your official PDF e-ticket is typically issued and sent to your WhatsApp in 5 to 15 minutes.'
-  },
-
-  faq_sec2_label: { id: 'Kapal Laut & Feri', en: 'Maritime & Ferry' },
-  faq_sec2_title: { id: 'Ketentuan Tiket Kapal Laut', en: 'Sea Voyage Details' },
-  faq_q4: { id: 'Bisa pesan tiket kapal untuk bawa motor atau mobil?', en: 'Can I book ferry tickets for my motorcycle or car?' },
-  faq_a4: {
-    id: 'Bisa. Kami melayani tiket penumpang kapal PELNI maupun tiket penyeberangan feri ASDP lengkap dengan kendaraan (motor, mobil keluarga, maupun mobil pick-up).',
-    en: 'Yes. We handle passenger tickets for PELNI vessels as well as ASDP ferry boarding passes for passengers with motorcycles or cars.'
-  },
-  faq_q5: { id: 'Berapa jam sebelum kapal berangkat saya harus standby di pelabuhan?', en: 'How early should I arrive at the port before departure?' },
-  faq_a5: {
-    id: 'Sebaiknya tiba di pelabuhan minimal 2 jam sebelum jadwal keberangkatan untuk menukar e-ticket dengan boarding pass fisik dan melewati pemeriksaan bagasi.',
-    en: 'We recommend arriving at least 2 hours before scheduled departure to exchange your voucher for physical boarding passes and clear baggage check.'
-  },
-
-  faq_sec3_label: { id: 'Pembayaran & Reschedule', en: 'Payment & Reschedule' },
-  faq_sec3_title: { id: 'Metode Bayar & Perubahan Tiket', en: 'Payments & Date Changes' },
-  faq_q6: { id: 'Pembayaran bisa lewat apa saja?', en: 'What payment options do you accept?' },
-  faq_a6: {
-    id: 'Bisa lewat transfer bank nasional (BCA, Mandiri, BRI, BNI, BSI) maupun scan QRIS untuk semua aplikasi e-wallet (GoPay, OVO, DANA, ShopeePay).',
-    en: 'We support bank transfers (BCA, Mandiri, BRI, BNI, BSI) and QRIS payments via all popular e-wallets.'
-  },
-  faq_q7: { id: 'Kalau jadwal mendadak berubah, apakah bisa reschedule?', en: 'Can I reschedule if my plans change unexpectedly?' },
-  faq_a7: {
-    id: 'Bisa. Segera kabari admin kami di WhatsApp. Kami bantu ajukan reschedule ke maskapai atau operator kapal sesuai dengan aturan dan ketentuan tarif yang berlaku.',
-    en: 'Yes. Notify our WhatsApp admin as soon as possible. We will guide and process your reschedule request following carrier fare policies.'
-  },
-
-  // ================= TESTIMONI (testimoni.html) =================
-  testi_hero_title: { id: 'Cerita Pengalaman Pelanggan Kami', en: 'Reviews from Our Travelers' },
-  testi_hero_desc: { id: 'Ulasan asli dari para penumpang yang memesan tiket pesawat dan kapal laut lewat RaksaTravel.', en: 'Real experiences and honest feedback from passengers who book their journeys with RaksaTravel.' },
-  testi_breadcrumb: { id: 'Testimoni Pelanggan', en: 'Testimonials' },
-
-  testi_stat_rating: { id: 'Kepuasan Layanan Pelanggan', en: 'Customer Satisfaction Score' },
-  testi_stat_tickets: { id: 'Tiket Berhasil Diterbitkan', en: 'Tickets Successfully Issued' },
-
-  testi_card1_text: {
-    id: '"Waktu itu butuh tiket pesawat Jayapura ke Makassar mendadak untuk urusan kerjaan kantor. Chat admin jam 7 pagi langsung dibalas, 10 menit kemudian e-ticket sudah masuk WA. Sangat membantu saat buru-buru."',
-    en: '"Needed an urgent flight from Jayapura to Makassar for work. Messaged their team at 7 AM and got an immediate reply. Within 10 minutes, my e-ticket was in my WhatsApp. Lifesaver!"'
-  },
-  testi_card1_author: { id: 'Bambang Prasetyo', en: 'Bambang Prasetyo' },
-  testi_card1_role: { id: 'Pegawai Swasta, Jayapura', en: 'Private Sector Employee, Jayapura' },
-
-  testi_card2_text: {
-    id: '"Baru pertama kali beli tiket kapal PELNI buat mudik sekeluarga 6 orang. Dijelaskan detail bedanya kelas ekonomi sama kabin ber-AC. Harganya pas dan gak ada biaya aneh-aneh."',
-    en: '"First time booking PELNI ship tickets for a family of 6. The staff explained the difference between economy and AC cabins clearly. Honest price without hidden markups."'
-  },
-  testi_card2_author: { id: 'Ibu Andini', en: 'Ibu Andini' },
-  testi_card2_role: { id: 'Ibu Rumah Tangga, Surabaya', en: 'Homemaker, Surabaya' },
-
-  testi_card3_text: {
-    id: '"Sempat panik karena salah sebut tanggal keberangkatan saat pesan tiket ke Bali. Untung adminnya sabar banget dan bantu proses ganti jadwal sampai tuntas tanpa ribet."',
-    en: '"Panicked when I realized I gave the wrong departure date for my Bali flight. Thankfully their admin patiently sorted out the reschedule smoothly."'
-  },
-  testi_card3_author: { id: 'Zakkry Al-Nazar', en: 'Zakkry Al-Nazar' },
-  testi_card3_role: { id: 'Fotografer Lepas, Wamena', en: 'Freelance Photographer, Wamena' },
-
-  testi_card4_text: {
-    id: '"Sudah jadi langganan tetap tiap kali pesan tiket penyeberangan feri dan kapal logistik kantor. Praktis tinggal WhatsApp, gak perlu antre berdesakan di loket pelabuhan."',
-    en: '"Our go-to contact for office vehicle ferry and logistics ticketing. Extremely convenient via WhatsApp, no need to queue for hours at crowded port counters."'
-  },
-  testi_card4_author: { id: 'Agus Salim', en: 'Agus Salim' },
-  testi_card4_role: { id: 'Staf Logistik, Merauke', en: 'Logistics Staff, Merauke' },
-
-  testi_card5_text: {
-    id: '"Penjelasannya ramah dan jelas banget untuk orang tua seperti saya yang jarang bepergian naik pesawat. Terasa aman dan tenang bertransaksi di sini."',
-    en: '"Patient and clear instructions, especially helpful for seniors like me who rarely travel by plane. Felt safe and well-guided throughout."'
-  },
-  testi_card5_author: { id: 'Siti Rahmawati', en: 'Siti Rahmawati' },
-  testi_card5_role: { id: 'Wirausaha, Biak', en: 'Business Owner, Biak' },
-
-  testi_card6_text: {
-    id: '"Harga tiketnya bersaing dan pilihan jam terbangnya selalu dicarikan yang paling pas sama jadwal kegiatan. Rekomendasi buat yang mau beli tiket tanpa repot."',
-    en: '"Competitive fares and they always find departure times that fit my schedule perfectly. Highly recommended for hassle-free ticketing."'
-  },
-  testi_card6_author: { id: 'Kevin Wijaya', en: 'Kevin Wijaya' },
-  testi_card6_role: { id: 'Pengusaha, Makassar', en: 'Business Owner, Makassar' },
-
-  // ================= KONTAK (kontak.html) =================
-  contact_hero_title: { id: 'Hubungi Tim RaksaTravel', en: 'Contact RaksaTravel Team' },
-  contact_hero_desc: { id: 'Ada pertanyaan tentang jadwal penerbangan, harga tiket kapal, atau bantuan perubahan tiket? Tim kami siap melayani Anda setiap hari kerja.', en: 'Have questions about flights, ship schedules, or need help with bookings? Our team is ready to assist daily.' },
-  contact_breadcrumb: { id: 'Kontak Kami', en: 'Contact Us' },
-
-  // Image 1 cards
-  contact_card_wa_title: { id: 'WhatsApp', en: 'WhatsApp' },
-  contact_card_wa_val: { id: '0821-5304-3601', en: '0821-5304-3601' },
-  contact_card_email_title: { id: 'Email', en: 'Email' },
-  contact_card_email_val: { id: 'santisalmi1005@gmail.com', en: 'santisalmi1005@gmail.com' },
-  contact_card_ig_title: { id: 'Instagram', en: 'Instagram' },
-  contact_card_ig_val: { id: '@raksatraveljayapura', en: '@raksatraveljayapura' },
-  contact_card_fb_title: { id: 'Facebook', en: 'Facebook' },
-  contact_card_fb_val: { id: 'RaksaTravelJayapura', en: 'RaksaTravelJayapura' },
-  contact_card_addr_title: { id: 'Lokasi Kantor', en: 'Office Location' },
-  contact_card_addr_val: { id: 'Kompleks Asri Residence, Jayapura, Papua', en: 'Kompleks Asri Residence, Jayapura, Papua' },
-  contact_card_hours_title: { id: 'Jam Operasional', en: 'Office Hours' },
-  contact_card_hours_val: { id: 'Senin - Sabtu, 08.00 - 20.00 WIT', en: 'Monday - Saturday, 08.00 - 20.00 WIT' },
-
-  contact_form_title: { id: 'Tulis Pesan atau Pertanyaan Anda', en: 'Send an Inquiry' },
-  contact_form_desc: { id: 'Isi pesan di bawah dan percakapan akan langsung tersambung ke admin WhatsApp kami untuk ditanggapi.', en: 'Fill out your message below to immediately connect with our WhatsApp admin for quick assistance.' },
-  contact_form_name: { id: 'Nama Lengkap', en: 'Full Name' },
-  contact_form_name_ph: { id: 'Contoh: Ahmad Rizki', en: 'e.g. Ahmad Rizki' },
-  contact_form_email: { id: 'Alamat Email', en: 'Email Address' },
-  contact_form_email_ph: { id: 'Contoh: ahmad@email.com', en: 'e.g. ahmad@email.com' },
-  contact_form_subject: { id: 'Kategori Keperluan', en: 'Inquiry Subject' },
-  contact_form_msg: { id: 'Pesan / Rincian Rute', en: 'Your Message / Route Details' },
-  contact_form_msg_ph: { id: 'Tuliskan rute, perkiraan tanggal keberangkatan, atau hal yang ingin Anda tanyakan...', en: 'Describe your route, planned departure date, or questions...' },
-  contact_form_submit: { id: 'Kirim Pesan ke WhatsApp', en: 'Send to WhatsApp' },
-
-  contact_map_title: { id: 'Alamat Kantor Kami', en: 'Our Physical Office' },
-  contact_map_open_btn: { id: 'Buka Petunjuk Arah di Google Maps', en: 'Open Directions in Google Maps' },
-  contact_hours_detail_title: { id: 'Jam Layanan Customer Support', en: 'Customer Support Hours' },
-  contact_day_mon: { id: 'Senin', en: 'Monday' },
-  contact_day_tue: { id: 'Selasa', en: 'Tuesday' },
-  contact_day_wed: { id: 'Rabu', en: 'Wednesday' },
-  contact_day_thu: { id: 'Kamis', en: 'Thursday' },
-  contact_day_fri: { id: 'Jumat', en: 'Friday' },
-  contact_day_sat: { id: 'Sabtu', en: 'Saturday' },
-  contact_day_sun: { id: 'Minggu / Tanggal Merah', en: 'Sunday / Public Holidays' },
-  contact_status_closed: { id: 'Tutup (Emergency WhatsApp Tetap Siaga)', en: 'Closed (Emergency WhatsApp on Standby)' },
-
-  // Select options
-  select_inquiry_options: {
-    id: ['Tanya Jadwal & Harga Tiket', 'Pemesanan Tiket Baru', 'Permintaan Reschedule / Ganti Jadwal', 'Bantuan Refund / Pembatalan', 'Pemesanan Rombongan / Korporat', 'Lainnya'],
-    en: ['Check Schedule & Ticket Price', 'New Ticket Booking', 'Reschedule / Date Change Request', 'Refund Assistance', 'Group / Corporate Booking', 'Other']
-  }
+sort:['Termurah|Tercepat|Paling pagi','Cheapest|Fastest|Earliest'],sortL:['Urutkan','Sort'],maxp:['Harga maks','Max price'],tod:['Semua waktu|Pagi|Siang|Malam','Any time|Morning|Afternoon|Night'],todL:['Waktu berangkat','Departure time'],direct:['Langsung saja','Direct only'],
+cheap:['Termurah','Cheapest'],fast:['Tercepat','Fastest'],pick:['Pilih','Select'],nonstop:['Langsung','Nonstop'],transit:['1 transit','1 stop'],
+empty:['Rute ini belum tersedia. Chat kami untuk cek manual.','This route isn’t available. Chat us to check manually.'],
+confirm:['Konfirmasi pesanan','Confirm your booking'],sendWa:['Kirim ke WhatsApp','Send to WhatsApp'],close:['Tutup','Close'],chat:['Chat kami','Chat us'],
+abH:['Kami bukan sekadar jual tiket.','We’re more than a ticket counter.'],
+abS:['Biro tiket perjalanan resmi di Jayapura sejak 2016: transparan, jujur, dan mudah diakses siapa saja.','Official travel ticket agency in Jayapura since 2016: transparent, honest, and open to everyone.'],
+stEy:['Cerita Kami','Our Story'],stH:['Bermula dari Niat Membantu Penumpang Dapat Tiket Resmi','It Started With Helping Travelers Get Official Tickets'],
+stP1:['RaksaTravel pertama kali membuka layanan di Jayapura pada tahun 2016. Saat itu, banyak calon penumpang kapal PELNI dan pesawat mengeluhkan susahnya mencari tiket resmi tanpa tergiur calo atau harga yang melambung tak wajar.','RaksaTravel opened in Jayapura in 2016. Back then, many PELNI and flight passengers struggled to find official tickets without falling for brokers or inflated prices.'],
+stP2:['Dari sana kami hadir dengan prinsip sederhana: melayani setiap pesanan secara terbuka, menerbitkan tiket resmi bergaransi, dan merespons setiap pertanyaan pelanggan dengan cepat lewat chat WhatsApp. Sampai sekarang, lebih dari 1.500 penumpang telah mempercayakan perjalanannya kepada kami.','So we started with a simple principle: serve every order openly, issue official guaranteed tickets, and answer every question fast on WhatsApp. To date, more than 1,500 travelers have trusted us with their journeys.'],
+stBtn:['Hubungi Tim Kami','Contact Our Team'],valsH:['Nilai yang kami pegang','What we stand for'],
+vals:['100% Amanah|Tiket resmi bergaransi, transparan, dan jujur.;;Respon Cepat|Chat Anda kami balas dengan cepat lewat WhatsApp.;;Tanggung Jawab Penuh|Ada kendala reschedule, pembatalan penerbangan dari maskapai, atau ganti nama? Kami kawal prosesnya sampai tuntas, dan kami pastikan customer sampai ke tempat dengan selamat.','100% Trustworthy|Official guaranteed tickets, transparent and honest.;;Fast Response|We answer your chats quickly on WhatsApp.;;Full Responsibility|Reschedule, airline cancellation, or name change? We see it through to the end, and make sure you arrive safely.'],
+tl:['2016|Mulai melayani di Jayapura;;2025|1.500+ penumpang mempercayai kami','2016|Started serving in Jayapura;;2025|1,500+ travelers trust us'],tlH:['Perjalanan kami','Our journey'],
+svH:['Layanan kami, dari take-off sampai sandar.','Our services, from take-off to docking.'],
+extra:['Hotel & Penginapan|Kamar nyaman di tujuan Anda.;;Visa & Dokumen|Kami bantu urus berkasnya.;;Paket Tour|Rute siap jalan, bisa disesuaikan.;;Corporate Travel|Invoice dan PO untuk perusahaan.','Hotels & Stays|A good room where you land.;;Visa & Documents|We help with the paperwork.;;Tour Packages|Ready routes, fully adjustable.;;Corporate Travel|Invoicing and POs for companies.'],
+cls:['Kelas PELNI|Ekonomi — hemat, kasur susun;;Ekonomi Khusus — kabin lebih lega;;Bisnis — kabin 4 orang ber-AC;;1st Class — kabin 2 orang privat','PELNI classes|Economy — budget bunks;;Premium Economy — roomier cabins;;Business — air-conditioned 4-berth;;1st Class — private 2-berth'],
+fqH:['Ada yang mau ditanyakan?','Got questions?'],fqS:['Cari pertanyaan…','Search questions…'],
+faqs:['Apakah harga sudah termasuk pajak?|Ya. Harga di hasil pencarian sudah termasuk pajak dan biaya layanan kami.;;Berapa lama proses pemesanan?|Biasanya 5–15 menit setelah Anda konfirmasi via WhatsApp.;;Bagaimana cara reschedule tiket?|Chat tim kami. Kami cek aturan maskapai dan urus perubahannya.;;Apakah bisa refund 100%?|Tergantung kebijakan maskapai atau PELNI. Kami bantu proses semaksimal mungkin.;;Metode pembayaran apa saja?|Virtual account, QRIS, transfer bank, dan cicilan 0% untuk kartu tertentu.;;Apakah bisa pesan untuk orang lain?|Bisa. Cukup kirim nama sesuai identitas penumpang.;;Bagaimana jika PELNI delay?|Kami pantau jadwal dan kabari Anda, lalu bantu atur ulang.;;Apakah menerima PO corporate?|Ya, lengkap dengan invoice dan faktur pajak.','Are prices tax-inclusive?|Yes. Prices in results include taxes and our service fee.;;How long does booking take?|Usually 5–15 minutes after you confirm on WhatsApp.;;How do I reschedule?|Message our team. We check the carrier’s rules and handle the change.;;Can I get a full refund?|It depends on the airline or PELNI policy. We push for the best outcome.;;What payment methods are available?|Virtual account, QRIS, bank transfer, and 0% installments on select cards.;;Can I book for someone else?|Yes. Just send the name exactly as on their ID.;;What if the PELNI ferry is delayed?|We track schedules, notify you, and help rebook.;;Do you accept corporate POs?|Yes, with invoices and tax receipts.'],
+fqMore:['Masih ada pertanyaan?','Still have questions?'],
+tmH:['Kata mereka yang sudah berangkat.','Words from those who’ve traveled.'],stat:['penumpang|rating|referral','travelers|rating|referrals'],
+kH:['Mari bicara.','Let’s talk.'],kS:['Tim kami siap melayani Anda, Senin–Sabtu 08.00–20.00 WIT.','Our team is ready for you, Mon–Sat 8 AM – 8 PM (WIT).'],
+kfH:['Tulis Pesan atau Pertanyaan Anda','Write Your Message or Question'],kfS:['Isi pesan di bawah dan percakapan langsung tersambung ke admin WhatsApp kami.','Fill in below and the chat connects straight to our WhatsApp admin.'],kfN:['Nama Lengkap','Full Name'],kfNp:['Contoh: Ahmad Rizki','e.g. Ahmad Rizki'],kfE:['Alamat Email','Email Address'],kfC:['Kategori Keperluan','Category'],kfCo:['Tanya Jadwal & Harga Tiket|Reschedule, Pembatalan & Ganti Nama|Pemesanan Tiket Kapal PELNI|Lainnya','Ask Schedule & Ticket Price|Reschedule, Cancellation & Name Change|PELNI Ferry Booking|Other'],kfM:['Pesan / Rincian Rute','Message / Route Details'],kfMp:['Tuliskan rute, perkiraan tanggal keberangkatan, atau hal yang ingin Anda tanyakan…','Write your route, estimated date, or anything you’d like to ask…'],kfB:['Kirim Pesan ke WhatsApp','Send Message to WhatsApp'],kfErr:['Isi nama dan pesan dulu.','Please enter your name and message.'],adH:['Alamat Kantor Kami','Our Office'],adB:['Buka Petunjuk Arah di Google Maps','Open Directions in Google Maps'],hrH:['Jam Layanan Customer Support','Customer Support Hours'],hrT:['08.00 – 20.00 WIT','8 AM – 8 PM (WIT)'],hrC:['Tutup (Emergency WhatsApp Tetap Siaga)','Closed (WhatsApp emergency still on)'],
+kWa:['Respon cepat via chat','Fast replies via chat'],kEm:['Surat resmi & penawaran','Official letters & offers'],kIg:['Update promo & rute','Promo & route updates'],kFb:['Halaman komunitas','Community page'],kLoc:['Lokasi Kantor','Office'],kMap:['Buka di Google Maps →','Open in Google Maps →'],kHr:['Jam Operasional','Opening Hours'],kHrV:['Senin – Sabtu, 08.00 – 20.00 WIT','Mon – Sat, 8 AM – 8 PM (WIT)'],kHrS:['Minggu: Siaga WhatsApp','Sunday: WhatsApp standby'],
+kForm:['Nama|Email|Pesan|Kirim','Name|Email|Message|Send'],kOk:['Terima kasih! Kami balas secepatnya.','Thanks! We’ll reply shortly.'],kErr:['Lengkapi semua kolom dengan benar.','Please fill in all fields correctly.'],
+phone:['Telepon','Phone'],
+fTag:['Tiket beres, kamu tinggal berangkat.','Tickets sorted. You just show up.'],fHours:['Senin–Sabtu 08.00–20.00 WIT · Minggu siaga WhatsApp','Mon–Sat 8 AM–8 PM (WIT) · Sunday WhatsApp standby'],fPriv:['Kebijakan Privasi · Syarat & Ketentuan','Privacy Policy · Terms'],
 };
-
-/* ===== THEME CONTROLLER ===== */
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('raksaTheme', theme);
-
-  const icon = document.getElementById('themeIcon');
-  if (icon) {
-    icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-  }
-}
-
-/* ===== LANGUAGE CONTROLLER ===== */
-function applyLanguage(lang) {
-  document.documentElement.setAttribute('data-lang', lang);
-  document.documentElement.lang = lang;
-  localStorage.setItem('raksaLang', lang);
-
-  // Update text elements
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const key = el.getAttribute('data-i18n');
-    if (T[key] && T[key][lang] !== undefined) {
-      el.textContent = T[key][lang];
-    }
-  });
-
-  // Update placeholder attributes
-  document.querySelectorAll('[data-i18n-ph]').forEach((el) => {
-    const key = el.getAttribute('data-i18n-ph');
-    if (T[key] && T[key][lang] !== undefined) {
-      el.placeholder = T[key][lang];
-    }
-  });
-
-  // Update dropdown options
-  document.querySelectorAll('[data-i18n-opts]').forEach((selectEl) => {
-    const key = selectEl.getAttribute('data-i18n-opts');
-    if (T[key] && T[key][lang]) {
-      const opts = T[key][lang];
-      selectEl.querySelectorAll('option').forEach((opt, idx) => {
-        if (opts[idx]) opt.textContent = opts[idx];
-      });
-    }
-  });
-
-  // Update nav lang indicators
-  const idOpt = document.getElementById('langOptId');
-  const enOpt = document.getElementById('langOptEn');
-  if (idOpt && enOpt) {
-    idOpt.classList.toggle('active', lang === 'id');
-    enOpt.classList.toggle('active', lang === 'en');
-  }
-}
-
-/* ===== DOM INITIALIZATION ===== */
-document.addEventListener('DOMContentLoaded', () => {
-  // 1. Initialize Theme (Default Dark Mode)
-  const savedTheme = localStorage.getItem('raksaTheme') || 'dark';
-  applyTheme(savedTheme);
-
-  const themeToggle = document.getElementById('themeToggle');
-  if (themeToggle) {
-    themeToggle.addEventListener('click', () => {
-      const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
-      applyTheme(currentTheme === 'dark' ? 'light' : 'dark');
-    });
-  }
-
-  // 2. Initialize Language (Default Indonesian)
-  const savedLang = localStorage.getItem('raksaLang') || 'id';
-  applyLanguage(savedLang);
-
-  const langToggle = document.getElementById('langToggle');
-  if (langToggle) {
-    langToggle.addEventListener('click', () => {
-      const currentLang = document.documentElement.getAttribute('data-lang') || 'id';
-      applyLanguage(currentLang === 'id' ? 'en' : 'id');
-    });
-  }
-
-  // 3. Navbar Sticky Effect, Top Progress Bar & Back to Top Button
-  const navbar = document.querySelector('.navbar');
-
-  // Inject Top Scroll Progress Bar if not present
-  let progressBar = document.querySelector('.scroll-progress-bar');
-  if (!progressBar) {
-    progressBar = document.createElement('div');
-    progressBar.className = 'scroll-progress-bar';
-    document.body.prepend(progressBar);
-  }
-
-  // Inject Back to Top Button if not present
-  let backToTopBtn = document.querySelector('.back-to-top');
-  if (!backToTopBtn) {
-    backToTopBtn = document.createElement('button');
-    backToTopBtn.className = 'back-to-top';
-    backToTopBtn.setAttribute('aria-label', 'Kembali ke atas');
-    backToTopBtn.innerHTML = '<i class="fas fa-arrow-up"></i>';
-    document.body.appendChild(backToTopBtn);
-    backToTopBtn.addEventListener('click', () => {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  }
-
-  // Inject Floating WhatsApp Tooltip
-  document.querySelectorAll('.wa-float').forEach((waBtn) => {
-    if (!waBtn.querySelector('.wa-tooltip')) {
-      const tooltip = document.createElement('span');
-      tooltip.className = 'wa-tooltip';
-      tooltip.textContent = 'Chat Kami di WhatsApp';
-      waBtn.appendChild(tooltip);
-    }
-  });
-
-  const handleScroll = () => {
-    const scrollY = window.scrollY;
-    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-
-    if (navbar) {
-      navbar.classList.toggle('scrolled', scrollY > 30);
-    }
-    if (progressBar && docHeight > 0) {
-      const progress = Math.min((scrollY / docHeight) * 100, 100);
-      progressBar.style.width = `${progress}%`;
-    }
-    if (backToTopBtn) {
-      backToTopBtn.classList.toggle('visible', scrollY > 280);
-    }
-  };
-  window.addEventListener('scroll', handleScroll, { passive: true });
-  handleScroll();
-
-  // 3. 3D Interactive Hologram Logo Physics Engine (Hero Section - Lightweight & Android/Battery-Friendly)
-  const hero3DStage = document.getElementById('hero3DStage');
-  const hero3DCard = document.getElementById('hero3DCard');
-  const heroLogoShine = document.getElementById('heroLogoShine');
-
-  if (hero3DStage && hero3DCard) {
-    let currentX = 0, currentY = 0;
-    let targetX = 0, targetY = 0;
-    let currentZ = 0, targetZ = 0;
-    let isHovered = false;
-    let idleAngle = 0;
-    let isStageInView = true;
-    let animationFrameId = null;
-
-    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (window.innerWidth <= 768);
-
-    // Viewport Liveness Observer (Zero CPU & Battery consumption on Android/Mobile when scrolled away)
-    if ('IntersectionObserver' in window) {
-      const stageObserver = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            isStageInView = entry.isIntersecting;
-            hero3DCard.style.animationPlayState = isStageInView ? 'running' : 'paused';
-            if (isStageInView && !animationFrameId && !isTouchDevice) {
-              animate3D();
-            }
-          });
-        },
-        { threshold: 0.1 }
-      );
-      stageObserver.observe(hero3DStage);
-    }
-
-    const handlePointerMove = (clientX, clientY) => {
-      const rect = hero3DStage.getBoundingClientRect();
-      const x = clientX - (rect.left + rect.width / 2);
-      const y = clientY - (rect.top + rect.height / 2);
-      targetX = Math.max(Math.min((y / (rect.height / 2)) * -16, 16), -16);
-      targetY = Math.max(Math.min((x / (rect.width / 2)) * 16, 16), -16);
-      targetZ = 20;
-
-      if (heroLogoShine) {
-        const shineX = 50 + (x / (rect.width / 2)) * 35;
-        const shineY = 50 + (y / (rect.height / 2)) * 35;
-        heroLogoShine.style.background = `radial-gradient(circle at ${shineX.toFixed(1)}% ${shineY.toFixed(1)}%, rgba(255, 255, 255, 0.6) 0%, transparent 65%)`;
-      }
-    };
-
-    if (!isTouchDevice) {
-      const heroSection = document.querySelector('.hero');
-      if (heroSection) {
-        heroSection.addEventListener('mousemove', (e) => {
-          const rect = hero3DStage.getBoundingClientRect();
-          if (
-            e.clientX >= rect.left - 150 &&
-            e.clientX <= rect.right + 150 &&
-            e.clientY >= rect.top - 150 &&
-            e.clientY <= rect.bottom + 150
-          ) {
-            isHovered = true;
-            handlePointerMove(e.clientX, e.clientY);
-          } else {
-            isHovered = false;
-            targetZ = 0;
-          }
-        }, { passive: true });
-
-        heroSection.addEventListener('mouseleave', () => {
-          isHovered = false;
-          targetZ = 0;
-        });
-      }
-
-      hero3DStage.addEventListener('mousedown', () => { targetZ = -10; });
-      window.addEventListener('mouseup', () => { if (isHovered) targetZ = 20; });
-
-      // High performance smooth spring render loop on desktop
-      const animate3D = () => {
-        if (!isStageInView) {
-          animationFrameId = null;
-          return;
-        }
-
-        if (isHovered) {
-          currentX += (targetX - currentX) * 0.1;
-          currentY += (targetY - currentY) * 0.1;
-          currentZ += (targetZ - currentZ) * 0.1;
-        } else {
-          idleAngle += 0.02;
-          const idleTiltX = Math.sin(idleAngle) * 4.5;
-          const idleTiltY = Math.cos(idleAngle * 0.7) * 6;
-          currentX += (idleTiltX - currentX) * 0.04;
-          currentY += (idleTiltY - currentY) * 0.04;
-          currentZ += (0 - currentZ) * 0.05;
-        }
-
-        hero3DCard.style.transform = `rotateX(${currentX.toFixed(2)}deg) rotateY(${currentY.toFixed(2)}deg) translateZ(${currentZ.toFixed(1)}px)`;
-        animationFrameId = requestAnimationFrame(animate3D);
-      };
-
-      animate3D();
-    } else {
-      // Fluid mobile / Android touch 3D gesture
-      hero3DStage.addEventListener('touchstart', (e) => {
-        if (e.touches.length > 0) {
-          hero3DCard.style.animationPlayState = 'paused';
-          handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
-          hero3DCard.style.transform = `rotateX(${targetX.toFixed(2)}deg) rotateY(${targetY.toFixed(2)}deg) translateZ(8px)`;
-        }
-      }, { passive: true });
-
-      hero3DStage.addEventListener('touchmove', (e) => {
-        if (e.touches.length > 0) {
-          handlePointerMove(e.touches[0].clientX, e.touches[0].clientY);
-          hero3DCard.style.transform = `rotateX(${targetX.toFixed(2)}deg) rotateY(${targetY.toFixed(2)}deg) translateZ(8px)`;
-        }
-      }, { passive: true });
-
-      hero3DStage.addEventListener('touchend', () => {
-        hero3DCard.style.transform = '';
-        hero3DCard.style.animationPlayState = isStageInView ? 'running' : 'paused';
-      }, { passive: true });
-    }
-  }
-
-  // 4. Mobile Menu Navigation
-  const navToggle = document.getElementById('navToggle');
-  const navLinks = document.getElementById('navLinks');
-  const navOverlay = document.getElementById('navOverlay');
-
-  const openMobileMenu = () => {
-    if (!navToggle || !navLinks) return;
-    navLinks.classList.add('active');
-    navToggle.classList.add('active');
-    if (navOverlay) navOverlay.classList.add('active');
-    document.body.style.overflow = 'hidden';
-  };
-
-  const closeMobileMenu = () => {
-    if (!navToggle || !navLinks) return;
-    navLinks.classList.remove('active');
-    navToggle.classList.remove('active');
-    if (navOverlay) navOverlay.classList.remove('active');
-    document.body.style.overflow = '';
-  };
-
-  const toggleMobileMenu = (e) => {
-    if (e) e.stopPropagation();
-    if (!navLinks) return;
-    if (navLinks.classList.contains('active')) {
-      closeMobileMenu();
-    } else {
-      openMobileMenu();
-    }
-  };
-
-  if (navToggle) {
-    navToggle.addEventListener('click', toggleMobileMenu);
-  }
-  if (navOverlay) {
-    navOverlay.addEventListener('click', closeMobileMenu);
-  }
-
-  // Close when clicking any menu link
-  document.querySelectorAll('#navLinks a').forEach((link) => {
-    link.addEventListener('click', closeMobileMenu);
-  });
-
-  // Close when pressing Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && navLinks && navLinks.classList.contains('active')) {
-      closeMobileMenu();
-    }
-  });
-
-  // Reset menu if window is resized above 1024px
-  window.addEventListener('resize', () => {
-    if (window.innerWidth > 1024 && navLinks && navLinks.classList.contains('active')) {
-      closeMobileMenu();
-    }
-  }, { passive: true });
-
-  // 5. Scroll Reveal with IntersectionObserver & Instant Hero Reveal
-  const revealElements = document.querySelectorAll('.reveal, .reveal-left, .reveal-right, .reveal-scale');
-  if ('IntersectionObserver' in window) {
-    const revealObserver = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            revealObserver.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.05, rootMargin: '0px 0px 50px 0px' }
-    );
-    revealElements.forEach((el) => revealObserver.observe(el));
-  } else {
-    revealElements.forEach((el) => el.classList.add('visible'));
-  }
-
-  // Immediate reveal for hero elements so they render without any delay
-  requestAnimationFrame(() => {
-    document.querySelectorAll('.hero .reveal, .page-hero .reveal, .navbar').forEach((el) => {
-      el.classList.add('visible');
-    });
-  });
-
-  // 6. Number Counter Animation
-  const counters = document.querySelectorAll('[data-counter]');
-  const counterObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const el = entry.target;
-        const target = parseInt(el.getAttribute('data-counter'), 10);
-        const suffix = el.getAttribute('data-suffix') || '';
-        const prefix = el.getAttribute('data-prefix') || '';
-        const duration = 1800;
-        const startTime = performance.now();
-
-        const updateCounter = (currentTime) => {
-          const progress = Math.min((currentTime - startTime) / duration, 1);
-          const easedProgress = 1 - Math.pow(1 - progress, 3);
-          const currentVal = Math.round(target * easedProgress);
-          el.textContent = prefix + currentVal.toLocaleString('id-ID') + suffix;
-          if (progress < 1) requestAnimationFrame(updateCounter);
-        };
-
-        requestAnimationFrame(updateCounter);
-        counterObserver.unobserve(el);
-      });
-    },
-    { threshold: 0.3 }
-  );
-  counters.forEach((el) => counterObserver.observe(el));
-
-  // 7. Interactive FAQ Accordion
-  document.querySelectorAll('.faq-item').forEach((item) => {
-    const question = item.querySelector('.faq-question');
-    if (!question) return;
-    question.addEventListener('click', () => {
-      const isCurrentlyActive = item.classList.contains('active');
-      document.querySelectorAll('.faq-item').forEach((otherItem) => {
-        otherItem.classList.remove('active');
-      });
-      if (!isCurrentlyActive) {
-        item.classList.add('active');
-      }
-    });
-  });
-
-  // 8. Contact Form Submission → WhatsApp
-  const contactForm = document.getElementById('contactForm');
-  if (contactForm) {
-    contactForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const name = document.getElementById('formName')?.value.trim() || '';
-      const email = document.getElementById('formEmail')?.value.trim() || '';
-      const subject = document.getElementById('formSubject')?.value || '';
-      const message = document.getElementById('formMessage')?.value.trim() || '';
-
-      const currentLang = document.documentElement.getAttribute('data-lang') || 'id';
-      let waText = '';
-
-      if (currentLang === 'en') {
-        waText = `Hello RaksaTravel, my name is ${name}.\nEmail: ${email}\nCategory: ${subject}\n\nMessage:\n${message}`;
-      } else {
-        waText = `Halo RaksaTravel, nama saya ${name}.\nEmail: ${email}\nKategori: ${subject}\n\nPesan:\n${message}`;
-      }
-
-      const waUrl = `https://wa.me/6282153043601?text=${encodeURIComponent(waText)}`;
-      window.open(waUrl, '_blank');
-    });
-  }
-
-  // 9. Ticket Search Form Submission → WhatsApp
-  const ticketForm = document.getElementById('ticketForm');
-  if (ticketForm) {
-    ticketForm.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const type = document.getElementById('ticketType')?.value || '';
-      const from = document.getElementById('departure')?.value.trim() || '';
-      const to = document.getElementById('destination')?.value.trim() || '';
-      const date = document.getElementById('travelDate')?.value || '';
-      const pax = document.getElementById('passengers')?.value || '1';
-
-      const currentLang = document.documentElement.getAttribute('data-lang') || 'id';
-      let waText = '';
-
-      if (currentLang === 'en') {
-        waText = `Hello RaksaTravel, I would like to book a ticket:\n- Transport: ${type}\n- From: ${from}\n- To: ${to}\n- Date: ${date}\n- Passengers: ${pax} person(s)\n\nCould you please share available schedules and fares?`;
-      } else {
-        waText = `Halo RaksaTravel, saya ingin menanyakan dan memesan tiket:\n- Jenis: ${type}\n- Asal: ${from}\n- Tujuan: ${to}\n- Tanggal: ${date}\n- Jumlah: ${pax} orang\n\nMohon info jadwal dan harga tiket yang tersedia. Terima kasih!`;
-      }
-
-      const waUrl = `https://wa.me/6282153043601?text=${encodeURIComponent(waText)}`;
-      window.open(waUrl, '_blank');
-    });
-  }
-
-  // 10. Mark Active Nav Item (Supports Clean URL and .html)
-  const currentCleanPath = window.location.pathname.split('/').pop().replace(/\.html$/, '') || '';
-  document.querySelectorAll('#navLinks > a').forEach((link) => {
-    const hrefClean = (link.getAttribute('href') || '').replace(/^\.\//, '').replace(/\.html$/, '');
-    if (
-      (currentCleanPath === '' && (hrefClean === '' || hrefClean === '.' || hrefClean === 'index')) ||
-      (currentCleanPath !== '' && hrefClean === currentCleanPath)
-    ) {
-      link.classList.add('active');
-    }
-  });
-
-  // Mobile Bottom Bar Clean Link
-  const mobileCheckLink = document.querySelector('.mobile-bar-tickets');
-  if (mobileCheckLink) {
-    mobileCheckLink.setAttribute('href', 'cek-tiket');
-  }
-
-  // 11. Live Social Proof Booking Toast Notification (High Conversion)
-  const recentBookings = [
-    { name: 'Bambang P.', route: 'Tiket Pesawat: Jayapura - Makassar', time: '2 menit lalu', icon: 'fa-plane' },
-    { name: 'Siti Rahma', route: 'Tiket Kapal: Surabaya - Sorong', time: '5 menit lalu', icon: 'fa-ship' },
-    { name: 'Andini W.', route: 'Tiket Pesawat: Jayapura - Surabaya', time: '8 menit lalu', icon: 'fa-plane' },
-    { name: 'Zakkry A.', route: 'Tiket Pesawat: Jayapura - Wamena', time: '11 menit lalu', icon: 'fa-plane' },
-    { name: 'Agus Salim', route: 'Tiket Kapal PELNI: Jayapura - Biak', time: '14 menit lalu', icon: 'fa-ship' },
-    { name: 'Kevin W.', route: 'Tiket Pesawat: Jayapura - Jakarta', time: '18 menit lalu', icon: 'fa-plane' }
-  ];
-
-  let toastEl = document.querySelector('.live-booking-toast');
-  if (!toastEl) {
-    toastEl = document.createElement('div');
-    toastEl.className = 'live-booking-toast';
-    document.body.appendChild(toastEl);
-  }
-
-  let bookingIndex = 0;
-  let toastTimeout = null;
-
-  const showNextBooking = () => {
-    if (!toastEl) return;
-    const booking = recentBookings[bookingIndex];
-    bookingIndex = (bookingIndex + 1) % recentBookings.length;
-
-    toastEl.innerHTML = `
-      <div class="toast-avatar"><i class="fas ${booking.icon}"></i></div>
-      <div class="toast-body">
-        <div class="toast-title">${booking.name} baru memesan</div>
-        <div class="toast-route">${booking.route}</div>
-        <div class="toast-time"><i class="far fa-clock"></i> ${booking.time} • Terverifikasi</div>
-      </div>
-      <button class="toast-close" aria-label="Tutup"><i class="fas fa-times"></i></button>
-    `;
-
-    toastEl.classList.add('show');
-
-    toastEl.onclick = (e) => {
-      if (e.target.closest('.toast-close')) {
-        toastEl.classList.remove('show');
-        return;
-      }
-      window.open('https://wa.me/6282153043601?text=Halo%20RaksaTravel%2C%20saya%20ingin%20tanya%20dan%20pesan%20tiket', '_blank');
-    };
-
-    if (toastTimeout) clearTimeout(toastTimeout);
-    toastTimeout = setTimeout(() => {
-      toastEl.classList.remove('show');
-    }, 4500);
-  };
-
-  // Start showing social proof after 4.5 seconds, then periodically
-  const isMobileForToast = window.innerWidth <= 768;
-  const toastInterval = isMobileForToast ? 25000 : 14000;
-  const toastInitialDelay = isMobileForToast ? 6000 : 4500;
-  setTimeout(() => {
-    showNextBooking();
-    setInterval(showNextBooking, toastInterval);
-  }, toastInitialDelay);
-
-    // 14. Dynamic Poster Gallery Loader from promo-posters.json (With Mobile/PC Adaptive Rendering & 20s Polling)
-    const posterGrids = document.querySelectorAll('.promo-poster-grid, #promoPosterGrid');
-    if (posterGrids.length > 0) {
-      const isMobileDevice = window.innerWidth <= 768;
-      
-      const loadLivePromos = () => {
-        fetch(`promo-posters.json?_t=${Date.now()}`)
-          .then(res => {
-            if (!res.ok) throw new Error('Network error');
-            return res.json();
-          })
-          .then(posters => {
-            if (!Array.isArray(posters) || posters.length === 0) return;
-
-            const htmlContent = posters.slice(0, 6).map((p, idx) => {
-              const icon = p.badgeType === 'ship' ? 'fa-ship' : 'fa-plane';
-              const badgeLabel = p.badge || 'TIKET PROMO';
-              const title = p.title || 'Promo Spesial';
-              const desc = p.desc || `Promo ${badgeLabel} dengan harga spesial. Terbatas!`;
-              const waLink = `https://wa.me/6282153043601?text=${p.waText || encodeURIComponent('Halo RaksaTravel, saya tertarik promo ' + title)}`;
-
-              return `
-                <div class="promo-poster-card visible">
-                  <div class="promo-poster-img">
-                    <img src="${p.image}" alt="${title}" loading="${idx === 0 || !isMobileDevice ? 'eager' : 'lazy'}" decoding="async">
-                  </div>
-                  <div class="promo-poster-body">
-                    <span class="promo-poster-tag"><i class="fas ${icon}"></i> ${badgeLabel}</span>
-                    <h3>${title}</h3>
-                    <p>${desc}</p>
-                    <a href="${waLink}" class="btn btn-accent btn-sm" target="_blank" rel="noopener">
-                      <i class="fab fa-whatsapp"></i> Pesan Sekarang
-                    </a>
-                  </div>
-                </div>
-              `;
-            }).join('');
-
-            posterGrids.forEach(grid => {
-              grid.innerHTML = htmlContent;
-            });
-          })
-          .catch(() => {});
-      };
-
-      loadLivePromos();
-      // Silently sync promo updates in background every 20 seconds
-      setInterval(loadLivePromos, 20000);
-    }
-
-  // End of core client logic
-});
+const t=k=>T[k][L==='id'?0:1],loc=()=>L==='id'?'id-ID':'en-US';
+const lst=k=>t(k).split(';;').map(s=>s.split('|'));
+const idr=n=>new Intl.NumberFormat(loc(),{style:'currency',currency:'IDR',maximumFractionDigits:0}).format(n).replace(/\u00a0/g,' ');
+const nm=c=>C[c][L];
+const TS=[['Rina S.','CGK → DPS','Tiket keluarga 5 orang beres dalam 20 menit. Adminnya sabar banget.',5],['Pak Daud','JKT → UPG (PELNI)','Pertama kali naik kapal, dibantu dari pilih kabin sampai urusan bagasi.',5],['Maya L.','SUB → CGK','Reschedule dadakan, dikerjakan malam itu juga. Mantap.',5],['Hendra K.','Corporate','Invoice dan PO rapi, tim kami tinggal berangkat.',5],['Yuni A.','CGK → YIA','Harga sama dengan yang dikonfirmasi, tanpa biaya tambahan.',4],['Fajar M.','UPG → AMQ (PELNI)','Info kelas dan fasilitas kapal jelas, tidak bingung.',5]];
+const today=new Date(Date.now()+7*864e5).toISOString().slice(0,10);
+let S={mode:'f',from:'CGK',to:'DPS',date:today,pax:'1'},R={maxp:3000000,tod:'all',direct:false,sort:0},RS=[];
+const stars=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+const rv=h=>`<div class="rv">${h}</div>`;
+const sec=(c,h)=>`<section class="sec ${c}"><div class="wrap">${h}</div></section>`;
+const cardsH=(k,ic)=>lst(k).map(([a,b])=>`<div class="card rv">${ic?`<div class="ico">${ic}</div>`:''}<h3>${a}</h3><p class="muted">${b}</p></div>`).join('');
+const tmCard=r=>`<div class="card glass rv"><div class="stars">${stars(r[3])}</div><p style="margin:10px 0">“${r[2]}”</p><b>${r[0]}</b> <span class="muted">· ${r[1]}</span></div>`;
+const ABOUT_IMG='data:image/jpeg;base64,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'; // ponytail: dicrop dari screenshot, ganti foto asli
+const LOGO_SRC='logo.webp';
+const logo=c=>`<img class="${c}" src="${LOGO_SRC}" alt="RAKSA TRAVEL" width="${c==='lm'?38:140}" height="${c==='lm'?38:140}" loading="eager">`;
+const mkStars=(n,h)=>Array.from({length:n},()=>`<i class="st" style="left:${Math.random()*100}%;top:${Math.random()*h}%;--s:${(Math.random()*2+1).toFixed(1)}px;animation-delay:-${(Math.random()*4).toFixed(1)}s"></i>`).join('');
+$('#sky').innerHTML=mkStars(110,100);const HS=mkStars(90,72);
+const PLANE=`<svg viewBox="0 0 150 50"><path d="M4 26c0-4 8-7 20-7h86c18 0 36 2 36 7s-18 7-36 7H24C12 33 4 30 4 26z" fill="currentColor"/><path d="M78 19L62 4h12l22 15zM78 33L62 47h12l22-14zM12 20L6 6h10l12 14z" fill="currentColor" opacity=".85"/><circle class="bl" cx="142" cy="26" r="1.8" fill="#ff5a5a"/></svg>`;
+const SHIP=`<svg class="ship" viewBox="0 0 240 100"><path d="M8 58h224l-24 30H36z" fill="#1F6FA8"/><path d="M10 58h220" stroke="#fff" stroke-width="3"/><rect x="40" y="38" width="150" height="20" rx="3" fill="#f4f9fd"/><rect x="62" y="22" width="100" height="16" rx="3" fill="#e3edf5"/><rect x="92" y="8" width="26" height="14" rx="2" fill="#4A9EDB"/><path class="wd" d="M48 48h134M70 30h86" stroke-width="5" stroke-dasharray="7 7" fill="none"/></svg>`;
+const WV='M0 30Q150 0 300 30T600 30T900 30T1200 30V60H0z';
+const SCENE=`<div class="sc2" aria-hidden="true"><div class="sun"></div><div class="moon"></div>${HS}<i class="shoot"></i><i class="cl" style="top:12%;width:190px;animation-delay:-20s"></i><i class="cl" style="top:36%;width:140px;animation-duration:130s;animation-delay:-80s"></i><i class="cl" style="top:6%;width:160px;animation-duration:115s;animation-delay:-50s"></i><div class="pw">${PLANE}</div><div class="sea"><svg class="wv a" viewBox="0 0 1200 60" preserveAspectRatio="none"><path d="${WV}"/></svg><svg class="wv b" viewBox="0 0 1200 60" preserveAspectRatio="none"><path d="${WV}"/></svg></div><div class="shipw">${SHIP}</div></div>`;
+// PROMO: edit di sini atau sinkronkan via promos.json
+let PR=[
+  {a:'Lion Air',d:1,f:'Makassar',t:'Jayapura',days:[29],m:10,tiers:[{p:2910000,b:10}]},
+  {a:'Batik Air',d:1,f:'Makassar',t:'Jayapura',days:[29],m:10,tiers:[{p:3090000,b:20}]},
+  {a:'Batik Air',d:1,f:'Jayapura',t:'Makassar',days:[28],m:10,tiers:[{p:2290000,b:20},{p:2450000,b:20}]},
+  {a:'Lion Air',d:1,f:'Jayapura',t:'Makassar',days:[19,20,21,23,25,26],m:10,tiers:[{p:2360000,b:10}]},
+  {a:'Sriwijaya Air',d:0,f:'Makassar',t:'Jayapura',days:[26,27,28,29,30,31],m:10,tiers:[{p:3250000,b:15},{p:3475000,b:15}]},
+  {a:'Batik Air',d:1,f:'Jayapura',t:'Makassar',days:[19,20,21],m:10,tiers:[{p:2450000,b:20},{p:2600000,b:20}]}
+];
+if(location.protocol.startsWith('http')){fetch('promos.json').then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)&&d.length){PR=d.slice(0,6);results();const h=$('#p-home .gp');if(h)h.innerHTML=PR.slice(0,3).map(pcard).join('');}}).catch(()=>{});}
+Object.assign(R,{f:'all',q:''});
+const wa=m=>`https://wa.me/${WA}?text=${encodeURIComponent(m)}`;
+const pcard=r=>{const mo=new Intl.DateTimeFormat(loc(),{month:'long'}).format(new Date(2026,r.m-1,1)),dr=t('dirB').split('|'),dd=r.days.join(', '),
+tiers=r.tiers||(r.p?[{p:r.p,b:r.b}]:[]),
+pTxt=tiers.map(x=>`${idr(x.p)} (${t('bag')} ${x.b} Kg)`).join(' / '),
+msg=L==='id'?`Halo RAKSA TRAVEL, saya mau pesan promo ${r.a} ${r.f} → ${r.t}, tanggal ${dd} ${mo}. Pilihan: ${pTxt}.`:`Hi RAKSA TRAVEL, I’d like to book the ${r.a} promo ${r.f} → ${r.t}, ${mo} ${dd}. Options: ${pTxt}.`;
+return`<article class="card pc rv"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><span class="al">${r.a}</span><span class="badge${r.d?'':' tr'}">${r.d?dr[0]:dr[1]}</span></div><div class="rt"><span>${r.f}</span><i></i><span>${r.t}</span></div><div><small class="muted">${t('pDate')}</small><div class="ch">${r.days.map(d=>`<span>${d}</span>`).join('')}<b style="font-weight:500">${mo}</b></div></div><div class="tiers${tiers.length>1?' multi':''}">${tiers.map(x=>`<div class="tr-row"><div class="pp">${idr(x.p)}</div><span class="bg">${t('bag')} ${x.b} Kg</span></div>`).join('')}</div><a class="btn p" target="_blank" rel="noopener" href="${wa(msg)}">${t('orderWa')}</a></article>`};
+function results(){const el=$('#res');if(!el)return;const q=R.q.toLowerCase(),rows=PR.filter(r=>(R.f==='all'||String(r.d)===R.f)&&(r.f+' '+r.t+' '+r.a).toLowerCase().includes(q));
+el.innerHTML=rows.length?rows.map(pcard).join(''):`<div class="card" style="grid-column:1/-1;text-align:center;padding:48px"><p>${t('empty')}</p><a class="btn p" style="margin-top:16px" target="_blank" rel="noopener" href="${wa('Halo RAKSA TRAVEL!')}">${t('ctaW')}</a></div>`;obs()}
+const MAP='https://www.google.com/maps/search/?api=1&query=Kompleks+Asri+Residence+Jayapura';
+const cSel=(name,opts,icons=[])=>{const oArr=typeof opts==='string'?opts.split('|'):opts;return`<div class="c-sel" data-name="${name}"><input type="hidden" name="${name}" value="${oArr[0]}"><div role="button" tabindex="0" class="in c-sel-btn" aria-haspopup="listbox" aria-expanded="false"><span class="c-sel-val">${icons[0]?`<span class="ico-s">${icons[0]}</span>`:''}${oArr[0]}</span><svg class="c-sel-arr" viewBox="0 0 20 20" fill="none"><path d="M5 7.5L10 12.5L15 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="c-sel-menu" role="listbox">${oArr.map((x,i)=>`<div class="c-sel-opt${i===0?' on':''}" role="option" tabindex="0" data-val="${x}">${icons[i]?`<span class="ico-s">${icons[i]}</span>`:''}<span>${x}</span><svg class="chk" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3.5 3.5 6.5-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`).join('')}</div></div>`};
+const KF=()=>`<form id="kq" class="card rv" style="display:grid;gap:14px" novalidate><h2 style="font-size:1.5rem">${t('kfH')}</h2><p class="muted">${t('kfS')}</p><label class="f">${t('kfN')}<input class="in" name="kn" placeholder="${t('kfNp')}"></label><label class="f">${t('kfE')}<input class="in" name="ke" type="email" placeholder="ahmad@email.com"></label><div class="f"><span>${t('kfC')}</span>${cSel('kc',t('kfCo'),['🎫','🔄','🚢','💬'])}</div><label class="f">${t('kfM')}<textarea class="in" name="km" rows="4" placeholder="${t('kfMp')}"></textarea></label><button class="btn p" type="submit">💬 ${t('kfB')}</button></form>`;
+const KR=()=>`<div style="display:grid;gap:20px"><div class="card rv" style="text-align:center"><div style="font-size:2.2rem">🗺️</div><h3 style="margin:6px 0">${t('adH')}</h3><p class="muted" style="margin-bottom:16px">Kompleks Asri Residence, Jayapura, Papua</p><a class="btn p" target="_blank" rel="noopener" href="${MAP}">${t('adB')}</a></div><div class="card rv"><h3 style="margin-bottom:10px">🕒 ${t('hrH')}</h3>${[0,1,2,3,4,5].map(i=>`<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0"><b style="font-weight:500">${new Intl.DateTimeFormat(loc(),{weekday:'long'}).format(new Date(2026,9,26+i))}</b><span class="muted">${t('hrT')}</span></div>`).join('')}<div style="display:flex;justify-content:space-between;gap:12px;padding:8px 0"><b style="font-weight:500">${new Intl.DateTimeFormat(loc(),{weekday:'long'}).format(new Date(2026,9,25))}</b><span style="color:var(--coral);text-align:right">${t('hrC')}</span></div></div></div>`;
+document.addEventListener('submit',e=>{if(e.target.id!=='kq')return;e.preventDefault();const f=e.target,n=f.kn.value.trim(),m=f.km.value.trim();if(!n||!m)return toast(t('kfErr'));
+open(wa(L==='id'?`Halo RAKSA TRAVEL, saya ${n}${f.ke.value?` (${f.ke.value})`:''}.\nKeperluan: ${f.kc.value}\nPesan: ${m}`:`Hi RAKSA TRAVEL, I’m ${n}${f.ke.value?` (${f.ke.value})`:''}.\nTopic: ${f.kc.value}\nMessage: ${m}`),'_blank','noopener')});
+const QF=()=>`<section class="sec qf-sec" style="padding:20px 0 0"><div class="wrap"><form id="qf" class="card glass" novalidate><h2 style="font-size:1.6rem">${t('qH')}</h2><p class="muted" style="margin:6px 0 18px">${t('qS')}</p><div class="fl"><div class="f"><span>${t('qMode')}</span>${cSel('qm',t('qOpt'),['✈️','🚢'])}</div><label class="f">${t('qFrom')}<input class="in" name="oc" placeholder="${t('qPhF')}"></label><label class="f">${t('qTo')}<input class="in" name="dc" placeholder="${t('qPhT')}"></label><label class="f">${t('qDate')}<input class="in" type="date" name="qd" min="${new Date().toISOString().slice(0,10)}"></label><label class="f">${t('qPax')}<input class="in" type="number" name="qp" min="1" max="20" value="1"></label><button class="btn p" type="submit">💬 ${t('qGo')}</button></div></form></div></section>`;
+document.addEventListener('submit',e=>{if(e.target.id!=='qf')return;e.preventDefault();const f=e.target,o=f.oc.value.trim(),d=f.dc.value.trim();if(!o||!d)return toast(t('qErr'));const m=f.qm.value,dt=f.qd.value?new Intl.DateTimeFormat(loc(),{dateStyle:'full'}).format(new Date(f.qd.value+'T00:00')):'-';
+open(wa(L==='id'?`Halo RAKSA TRAVEL, saya mau tanya ${m}.\nDari: ${o}\nTujuan: ${d}\nTanggal: ${dt}\nPenumpang: ${f.qp.value}`:`Hi RAKSA TRAVEL, I’d like to ask about a ${m}.\nFrom: ${o}\nTo: ${d}\nDate: ${dt}\nPassengers: ${f.qp.value}`),'_blank','noopener')});
+function cek(){const f=t('pFilt').split('|');return`<div class="pgh">${SCENE}<div class="wrap"><h1 style="font-size:clamp(2rem,4vw,3.2rem)">${t('ckH')}</h1><p class="muted" style="margin-top:10px">${t('mock')}</p></div></div>${QF()}<section class="sec" style="padding-top:20px"><div class="wrap"><h2>${t('pH')}</h2><div class="bar"><div class="tabs" role="group" style="margin:0">${['all','1','0'].map((v,i)=>`<button data-pf="${v}" aria-pressed="${R.f===v}">${f[i]}</button>`).join('')}</div><input class="in" id="pq" value="${R.q}" placeholder="${t('qPh')}" aria-label="${t('qPh')}" style="max-width:320px"></div><div id="res" class="grid gp"></div></div></section>`}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-pf]');if(b){R.f=b.dataset.pf;$$('[data-pf]').forEach(x=>x.setAttribute('aria-pressed',x===b));results();return}
+const sBtn=e.target.closest('.c-sel-btn'),sOpt=e.target.closest('.c-sel-opt');
+if(sBtn){const sel=sBtn.closest('.c-sel'),was=sel.classList.contains('open');$$('.c-sel.open').forEach(s=>{s.classList.remove('open');s.querySelector('.c-sel-btn')?.setAttribute('aria-expanded','false')});if(!was){sel.classList.add('open');sBtn.setAttribute('aria-expanded','true')}return}
+if(sOpt){const sel=sOpt.closest('.c-sel'),val=sOpt.dataset.val,inp=sel.querySelector('input[type=hidden]');if(inp){inp.value=val;inp.dispatchEvent(new Event('change',{bubbles:true}))}const valEl=sel.querySelector('.c-sel-val'),ico=sOpt.querySelector('.ico-s')?.outerHTML||'';if(valEl)valEl.innerHTML=(ico?ico+' ':'')+val;$$('.c-sel-opt',sel).forEach(o=>o.classList.toggle('on',o===sOpt));sel.classList.remove('open');sel.querySelector('.c-sel-btn')?.setAttribute('aria-expanded','false');return}
+if(!e.target.closest('.c-sel'))$$('.c-sel.open').forEach(s=>{s.classList.remove('open');s.querySelector('.c-sel-btn')?.setAttribute('aria-expanded','false')})});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){$$('.c-sel.open').forEach(s=>{s.classList.remove('open');s.querySelector('.c-sel-btn')?.setAttribute('aria-expanded','false')});return}
+const sBtn=e.target.closest('.c-sel-btn');if(sBtn&&(e.key==='Enter'||e.key===' ')){e.preventDefault();const sel=sBtn.closest('.c-sel'),was=sel.classList.contains('open');$$('.c-sel.open').forEach(s=>{s.classList.remove('open');s.querySelector('.c-sel-btn')?.setAttribute('aria-expanded','false')});if(!was){sel.classList.add('open');sBtn.setAttribute('aria-expanded','true')}return}
+const sOpt=e.target.closest('.c-sel-opt');if(sOpt&&(e.key==='Enter'||e.key===' ')){e.preventDefault();sOpt.click()}});
+document.addEventListener('input',e=>{if(e.target.id==='pq'){R.q=e.target.value;results()}});
+function home(){const d=lst('dest').map(([n,c,desc,img])=>`<a class="dst rv" href="/cek-tiket"><img src="${img}" alt="${n}" loading="lazy"><div class="glass"><span class="city">${c}</span><h3>${n}</h3><p>${desc}</p></div></a>`).join('');
+const sv=lst('svcs').map(([i,a,b])=>`<div class="card glass rv" style="padding:36px"><div class="ico" style="font-size:3rem">${i}</div><h3>${a}</h3><p class="muted" style="margin:6px 0 18px">${b}</p><a class="btn" href="/layanan">${t('seeSvc')}</a></div>`).join('');
+const st=lst('steps').map(([a,b],i)=>`<div class="rv"><div class="num">0${i+1}</div><h3 style="margin:8px 0 4px">${a}</h3><p class="muted">${b}</p></div>`).join('');
+const air=['Garuda Indonesia','Lion Air','Batik Air','Citilink','Super Air Jet','PELNI'].map(x=>`<span>${x}</span>`).join('');
+return`<div class="hero"><div class="sc2" aria-hidden="true"><div class="sun"></div><div class="moon"></div>${HS}<i class="shoot"></i><i class="cl" style="top:16%;width:200px;animation-delay:-20s"></i><i class="cl" style="top:34%;width:150px;animation-duration:130s;animation-delay:-70s"></i><i class="cl" style="top:8%;width:170px;animation-duration:115s;animation-delay:-45s"></i><div class="pw">${PLANE}</div><div class="sea"><svg class="wv a" viewBox="0 0 1200 60" preserveAspectRatio="none"><path d="${WV}"/></svg><svg class="wv b" viewBox="0 0 1200 60" preserveAspectRatio="none"><path d="${WV}"/></svg></div><div class="shipw">${SHIP}</div></div>
+<div class="wrap"><span class="pill glass">${t('eyebrow')}</span><h1>${t('h1')}</h1><p class="sub">${t('sub')}</p><div class="hb">${logo('hl')}<div class="hn">RAKSA TRAVEL</div></div><div class="hcta"><a class="btn p" href="/cek-tiket">${t('hC1')}</a><a class="btn" target="_blank" rel="noopener" href="${wa('Halo RAKSA TRAVEL!')}">${t('ctaW')}</a></div><p class="trust">${t('trust')}</p></div></div>
+<div class="mq" aria-hidden="true"><div>${air+air+air+air}</div></div>
+${sec('','<h2 class="rv" style="margin-bottom:32px">'+t('pH')+'</h2><div class="grid gp">'+PR.slice(0,3).map(pcard).join('')+'</div><a class="btn" style="margin-top:28px" href="/cek-tiket">'+t('pAllB')+'</a>')}
+${sec('','<div class="rv" style="margin-bottom:32px"><h2>'+t('dH')+'</h2><p class="muted" style="margin-top:8px">'+t('dSub')+'</p></div><div class="grid g4">'+d+'</div>')}
+${sec('alt','<h2 class="rv" style="margin-bottom:32px">'+t('sH')+'</h2><div class="grid g2">'+sv+'</div>')}
+${sec('','<h2 class="rv" style="margin-bottom:32px">'+t('wH')+'</h2><div class="grid g4">'+cardsH('why')+'</div>')}
+${sec('alt','<h2 class="rv" style="margin-bottom:32px">'+t('stH')+'</h2><div class="tl">'+st+'</div>')}
+${sec('','<h2 class="rv" style="margin-bottom:32px">'+t('tH')+'</h2><div class="car">'+TS.slice(0,3).map(tmCard).join('')+'</div><a class="btn" style="margin-top:20px" href="/testimoni">'+t('tAll')+'</a>')}
+${sec('alt','<h2 class="rv" style="margin-bottom:24px">'+t('fH')+'</h2><div>'+faqH(lst('faqs').slice(0,3))+'</div><a class="btn" style="margin-top:20px" href="/faq">'+t('fAll')+'</a>')}
+<div class="cta"><div class="wrap"><h2>${t('ctaH')}</h2><p>${t('ctaS')}</p><a class="btn w" target="_blank" rel="noopener" href="${wa(L==='id'?'Halo RAKSA TRAVEL!':'Hi RAKSA TRAVEL!')}">${t('ctaW')}</a> <a class="btn" style="color:#fff" href="/cek-tiket">${t('cek')}</a></div></div>`}
+const faqH=l=>l.map(([q,a],i)=>`<div class="ac rv${i?'':' open'}"><button aria-expanded="${!i}" data-ac>${q}<span>＋</span></button><div class="bd"><div>${a}</div></div></div>`).join('');
+const hero=(h,s)=>`<div class="pgh">${SCENE}<div class="wrap"><h1>${h}</h1>${s?`<p class="muted" style="max-width:640px;margin-top:16px;font-size:1.1rem">${s}</p>`:''}</div></div>`;
+const PG={home,'cek-tiket':cek,
+layanan:()=>hero(t('svH'))+sec('','<div class="grid g2">'+lst('svcs').map(([i,a,b])=>`<div class="card"><div class="ico">${i}</div><h3>${a}</h3><p class="muted" style="margin:6px 0 16px">${b}</p><a class="btn p sm" href="/cek-tiket">${t('search')}</a></div>`).join('')+'</div>')+sec('alt','<div class="grid g4">'+cardsH('extra')+'</div>')+sec('','<h2 class="rv" style="margin-bottom:24px">'+t('cls').split('|')[0]+'</h2><div class="grid g4">'+t('cls').split('|').slice(1).join('|').split(';;').map(x=>`<div class="card rv">${x}</div>`).join('')+'</div>'),
+tentang:()=>hero(t('abH'),t('abS'))+sec('','<div class="grid g2" style="align-items:center"><div class="rv"><img src="'+ABOUT_IMG+'" alt="RAKSA TRAVEL" style="width:100%;display:block;border-radius:28px;box-shadow:var(--cs)"></div><div class="rv"><div class="eyebrow">'+t('stEy')+'</div><h2 style="margin-bottom:16px">'+t('stH')+'</h2><p class="muted" style="margin-bottom:14px">'+t('stP1')+'</p><p class="muted">'+t('stP2')+'</p><a class="btn p" style="margin-top:22px" href="/kontak">'+t('stBtn')+'</a></div></div>')+sec('alt','<h2 class="rv" style="margin-bottom:24px">'+t('valsH')+'</h2><div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">'+lst('vals').map(([a,b],i)=>`<div class="card rv"><div class="num" style="font-size:2rem">0${i+1}</div><h3 style="margin:6px 0">${a}</h3><p class="muted">${b}</p></div>`).join('')+'</div>')+sec('','<h2 class="rv" style="margin-bottom:24px">'+t('tlH')+'</h2><div class="tl">'+lst('tl').map(([y,x])=>`<div class="rv"><div class="num">${y}</div><p class="muted">${x}</p></div>`).join('')+'</div>'),
+faq:()=>hero(t('fqH'))+sec('','<input class="in" id="fs" placeholder="'+t('fqS')+'" aria-label="'+t('fqS')+'" style="margin-bottom:20px"><div id="fl">'+faqH(lst('faqs'))+'</div><div class="card glass" style="margin-top:32px;text-align:center"><h3>'+t('fqMore')+'</h3><a class="btn p" style="margin-top:12px" target="_blank" rel="noopener" href="'+wa('Halo RAKSA TRAVEL!')+'">'+t('ctaW')+'</a></div>'),
+testimoni:()=>{const s=t('stat').split('|');return hero(t('tmH'))+sec('alt','<div class="grid g4">'+[[1500,0,'+',s[0]],[4.9,1,'',s[1]],[98,0,'%',s[2]]].map(x=>`<div class="rv"><div class="num"><span class="cnt" data-v="${x[0]}" data-d="${x[1]}">${x[0]}</span>${x[2]}</div><p class="muted">${x[3]}</p></div>`).join('')+'</div>')+sec('','<div class="grid g4">'+TS.map(tmCard).join('')+'</div>')},
+kontak:()=>{const f=t('kForm').split('|');
+// ponytail: URL IG/FB ditebak dari handle, cek ulang
+const K=[['💬','WhatsApp','0821-5304-3601',wa('Halo RAKSA TRAVEL!'),t('kWa')],['✉','Email','santisalmi1005@gmail.com','mailto:santisalmi1005@gmail.com',t('kEm')],['📷','Instagram','@raksatraveljayapura','https://instagram.com/raksatraveljayapura',t('kIg')],['👥','Facebook','RaksaTravelJayapura','https://facebook.com/RaksaTravelJayapura',t('kFb')],['📍',t('kLoc'),'Kompleks Asri Residence, Jayapura, Papua','https://www.google.com/maps/search/?api=1&query=Kompleks+Asri+Residence+Jayapura',t('kMap')],['🕒',t('kHr'),t('kHrV'),'',t('kHrS')]];
+return hero(t('kH'),t('kS'))+sec('','<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(290px,1fr))">'+K.map(([i,a,b,h,c])=>`<${h?'a':'div'} class="card rv" ${h?`href="${h}" target="_blank" rel="noopener"`:''} style="display:flex;gap:16px;align-items:flex-start;color:inherit"><div style="font-size:1.5rem;width:48px;height:48px;flex:none;display:grid;place-items:center;border-radius:16px;background:var(--glow)">${i}</div><div style="min-width:0"><h3>${a}</h3><div style="color:var(--s3);word-break:break-word">${b}</div><small class="muted" style="display:block">${c}</small></div></${h?'a':'div'}>`).join('')+'</div><div class="grid g2" style="margin-top:24px;align-items:start">'+KF()+KR()+'</div>')}};
+function nav(){const lk=[['home','home'],['cek-tiket','cek'],['layanan','svc'],['tentang','about'],['faq','faq'],['testimoni','testi'],['kontak','contact']];
+$('#nav').innerHTML=`<div class="nb"><a class="logo" href="/home">${logo('lm')} RAKSA<b>TRAVEL</b></a><nav class="lk" id="lk" aria-label="Main">${lk.map(([h,k])=>`<a href="/${h}" data-h="${h}">${t(k)}</a>`).join('')}</nav><div class="ctl"><div class="lg" role="group" aria-label="Language"><button data-lang="id" aria-pressed="${L==='id'}">ID</button><button data-lang="en" aria-pressed="${L==='en'}">EN</button></div><button class="ic" id="th" aria-pressed="${TH==='dark'}" aria-label="${TH==='dark'?t('thL'):t('thD')}" title="${TH==='dark'?t('thL'):t('thD')}">${TH==='dark'?'☀':'☾'}</button><a class="btn p sm" target="_blank" rel="noopener" href="${wa('Halo RAKSA TRAVEL!')}">${t('book')}</a><button class="ic mb" data-act="menu" aria-label="Menu" aria-expanded="false">☰</button></div></div>`;
+$('#skip').textContent=t('skip');$('#fw').innerHTML='💬 <span>'+t('chat')+'</span>';$('#fw').href=wa('Halo RAKSA TRAVEL!');
+$('#ft').innerHTML=`<div class="wrap grid g4"><div><div class="logo">${logo('lm')} RAKSA<b>TRAVEL</b></div><p class="muted" style="margin-top:8px">${t('fTag')}</p></div><div>${lk.map(([h,k])=>`<a href="/${h}">${t(k)}</a>`).join('')}</div><div><a href="/kontak">${t('contact')}</a><a>0821-5304-3601</a><a>santisalmi1005@gmail.com</a></div><div class="muted">${t('fHours')}</div></div><div class="wrap muted" style="margin-top:40px;font-size:.875rem">© 2025 RAKSA TRAVEL · ${t('fPriv')}</div>`}
+function render(){document.documentElement.lang=L;nav();for(const k in PG)$('#p-'+k).innerHTML=PG[k]();mount();results();obs();route()}
+function mount(){$$('.wdgw').forEach(e=>e.innerHTML=wdg())}
+let io;function obs(){io&&io.disconnect();io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('vis');io.unobserve(e.target);if(e.target.querySelector('.cnt'))$$('.cnt',e.target).forEach(count)}}),{threshold:.12});$$('.rv:not(.vis)').forEach(e=>io.observe(e))}
+function count(el){const v=+el.dataset.v,d=+el.dataset.d,f=x=>new Intl.NumberFormat(loc(),{minimumFractionDigits:d,maximumFractionDigits:d}).format(x);if(RM)return el.textContent=f(v);const t0=performance.now(),run=n=>{const p=Math.min((n-t0)/1200,1);el.textContent=f(v*(1-Math.pow(1-p,3)));p<1&&requestAnimationFrame(run)};requestAnimationFrame(run)}
+const PAGES=['home','cek-tiket','layanan','tentang','faq','testimoni','kontak'];
+function getRoute(){const p=location.pathname.replace(/\/index\.html$/i,'').replace(/\.html$/i,'');const s=p.split('/').filter(Boolean).pop()||'';if(PAGES.includes(s))return s;const h=(location.hash||'').replace(/^#\/?/,'');if(PAGES.includes(h))return h;return 'home'}
+function navigate(url){const p=url.replace(/^\//,'').replace(/\.html$/i,'')||'home';const tg='/'+p;try{if(location.protocol!=='file:'&&location.pathname!==tg){history.pushState(null,'',tg)}}catch(e){}route()}
+function route(){let h=getRoute();if(!$('#p-'+h))h='home';const tg='/'+h;try{if(location.protocol!=='file:'&&(location.hash||(location.pathname!==tg&&location.pathname!=='/'&&!location.pathname.endsWith('/index.html')))){history.replaceState(null,'',tg)}}catch(e){}$$('#app>div').forEach(p=>p.hidden=p.id!=='p-'+h);$$('.lk a').forEach(a=>a.classList.toggle('on',a.dataset.h===h));const lk=$('#lk');if(lk)lk.classList.remove('open');const mb=$('[data-act=menu]');if(mb)mb.setAttribute('aria-expanded','false');scrollTo(0,0);document.title='RAKSA TRAVEL · '+({home:t('home'),'cek-tiket':t('cek'),layanan:t('svc'),tentang:t('about'),faq:t('faq'),testimoni:t('testi'),kontak:t('contact')})[h];if(h==='cek-tiket')results();obs()}
+function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),3200)}
+function setMode(m){S.mode=m;const l=m==='f'?AIR:SEA;S.from=l[0];S.to=l[1];mount();results()}
+addEventListener('popstate',route);
+addEventListener('hashchange',route);
+let stT=false,isSc=false,isFw=false;
+const onScroll=()=>{const y=scrollY||pageYOffset||0;if((y>60)!==isSc){isSc=y>60;$('#nav').classList.toggle('sc',isSc)}if((y>350)!==isFw){isFw=y>350;if(isFw)$('#fw').classList.add('on')}stT=false};
+addEventListener('scroll',()=>{if(!stT){requestAnimationFrame(onScroll);stT=true}},{passive:true});
+document.addEventListener('click',e=>{const a=e.target.closest('a');
+if(a){const h=a.getAttribute('href');if(h&&!a.target&&!h.startsWith('mailto:')&&!h.startsWith('tel:')&&!h.startsWith('javascript:')){if(h.startsWith('/')&&!h.startsWith('//')){const s=h.replace(/^\//,'').replace(/\.html$/i,'');if(PAGES.includes(s)){e.preventDefault();navigate('/'+s);return}}else if(h.startsWith('#')&&h!=='#app'){const s=h.slice(1);if(PAGES.includes(s)){e.preventDefault();navigate('/'+s);return}}}}
+const b=e.target.closest('button,a');if(!b)return;
+if(b.dataset.lang&&b.dataset.lang!==L){const a=$('#app');a.classList.add('sw');setTimeout(()=>{L=b.dataset.lang;ls('raksa-lang',L);render();a.classList.remove('sw');$('#live').textContent=L==='id'?'Bahasa Indonesia':'English'},120)}
+else if(b.id==='th'){TH=TH==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',TH);ls('raksa-theme',TH);nav()}
+else if(b.dataset.mode)setMode(b.dataset.mode);
+else if(b.dataset.act==='swap'){[S.from,S.to]=[S.to,S.from];mount();results()}
+else if(b.dataset.act==='go'){navigate('/cek-tiket');results()}
+else if(b.dataset.act==='menu'){const o=$('#lk').classList.toggle('open');b.setAttribute('aria-expanded',o)}
+else if(b.hasAttribute('data-ac')){const p=b.parentElement,o=!p.classList.contains('open');p.classList.toggle('open',o);b.setAttribute('aria-expanded',o)}
+else if(b.dataset.pick!==undefined){const r=RS[+b.dataset.pick],dt=new Intl.DateTimeFormat(loc(),{dateStyle:'full'}).format(new Date(S.date+'T00:00')),
+msg=L==='id'?`Halo RAKSA TRAVEL, saya mau pesan ${r[2]} ${r[0]} → ${r[1]}, ${dt}, ${S.pax} penumpang, ${idr(r[5])}.`:`Hi RAKSA TRAVEL, I’d like to book ${r[2]} ${r[0]} → ${r[1]}, ${dt}, ${S.pax} passenger(s), ${idr(r[5])}.`;
+$('#dlg').innerHTML=`<h3>${t('confirm')}</h3><p style="margin:14px 0"><b>${r[2]}</b><br>${nm(r[0])} → ${nm(r[1])}<br>${dt} · ${r[3]}<br>${S.pax} ${t('pax').toLowerCase()} · <b>${idr(r[5])}</b></p><div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn p" target="_blank" rel="noopener" href="${wa(msg)}">${t('sendWa')}</a><button class="btn" data-close>${t('close')}</button></div>`;$('#dlg').showModal()}
+else if(b.hasAttribute('data-close'))$('#dlg').close()});
+document.addEventListener('change',e=>{const n=e.target.name;if(!n)return;
+if(n in S){S[n]=e.target.value;if(n==='from'&&S.from===S.to||n==='to'&&S.from===S.to){const o=n==='from'?'to':'from';S[o]=(S.mode==='f'?AIR:SEA).find(c=>c!==S[n]);}$$('[name=from],[name=to],[name=date],[name=pax]').forEach(x=>{x.value=S[x.name]});results()}
+else if(n in R){R[n]=n==='direct'?e.target.checked:n==='maxp'?+e.target.value:n==='sort'?+e.target.value:e.target.value;results()}});
+document.addEventListener('input',e=>{if(e.target.name==='maxp'){R.maxp=+e.target.value;results()}
+if(e.target.id==='fs'){const q=e.target.value.toLowerCase();$$('#fl .ac').forEach(a=>a.hidden=!a.textContent.toLowerCase().includes(q))}});
+document.addEventListener('submit',e=>{if(e.target.id!=='kf')return;e.preventDefault();const f=e.target,ok=f.n.value.trim()&&/^\S+@\S+\.\S+$/.test(f.e.value)&&f.m.value.trim();toast(ok?t('kOk'):t('kErr'));if(ok)f.reset()});
+render();

@@ -1,4 +1,0 @@
-{
-  "install": "cd wa-bot && npm install",
-  "start": "cd wa-bot && node bot.cjs"
-}
