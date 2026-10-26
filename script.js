@@ -86,7 +86,7 @@ let PR=[
   {a:'Sriwijaya Air',d:0,f:'Makassar',t:'Jayapura',days:[26,27,28,29,30,31],m:10,tiers:[{p:3250000,b:15},{p:3475000,b:15}]},
   {a:'Batik Air',d:1,f:'Jayapura',t:'Makassar',days:[19,20,21],m:10,tiers:[{p:2450000,b:20},{p:2600000,b:20}]}
 ];
-if(location.protocol.startsWith('http')){fetch('promos.json').then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)&&d.length){PR=d.slice(0,6);results();const h=$('#p-home .gp');if(h)h.innerHTML=PR.slice(0,3).map(pcard).join('');}}).catch(()=>{});}
+if(location.protocol.startsWith('http')){fetch('promos.json').then(r=>r.ok?r.json():null).then(d=>{if(Array.isArray(d)&&d.length){PR=d.slice(0,6);const h=$('#p-home .gp');if(h)h.innerHTML=PR.slice(0,3).map(pcard).join('');results();obs();}}).catch(()=>{});}
 Object.assign(R,{f:'all',q:''});
 const wa=m=>`https://wa.me/${WA}?text=${encodeURIComponent(m)}`;
 const pcard=r=>{const mo=new Intl.DateTimeFormat(loc(),{month:'long'}).format(new Date(2026,r.m-1,1)),dr=t('dirB').split('|'),dd=r.days.join(', '),
